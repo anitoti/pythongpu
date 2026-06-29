@@ -32,20 +32,27 @@ class Config:
     n_nodes        : int   = 100
     n_edges        : int   = 50 # to control connectedness
     graph_seed     : int   = 7
-    sweep_points   : int   = 256 # increase for better resolution
+    sweep_points   : int   = 1024 # increase for better resolution
     tmax           : float = 200.0 # increase if basins need more time to separate into distinct attractors
     dt             : float = 0.02
-    coupling       : float = 0.1 # originally at 0.1
+    coupling       : float = 0.0001 # originally at 0.1
     sigma          : float = 10.0
     rho            : float = 28.0
     beta           : float = 8.0/3.0
     out_path       : str   = "/home/atotilca/pythongpu/data/lorenz_basins.npz"
     device         : str   = "cuda"
     # -- Affine slice parameters ---------------------------------
-    slice_node_x   : int   = 0    # node index varied on the x-axis of the grid
-    slice_node_y   : int   = 1    # node index varied on the y-axis of the grid
+    slice_node_x   : int   = 73    # node index varied on the x-axis of the grid
+    slice_node_y   : int   = 81    # node index varied on the y-axis of the grid
     base_state     : tuple = (1.0, 1.0, 1.0)  # (X, Y, Z) for all unvaried state entries
 
+    # run this to get top 5 connected hub nodes for 
+    # testing where one node doesn't dominate the other:
+    # python3 -c "import networkx as nx; G = nx.gnm_random_graph(100, 50, seed=7); print(sorted(G.degree, key=lambda x: x[1], reverse=True)[:5])"
+
+    # run this to find neighbors of a node:
+    # python3 -c "import networkx as nx; G = nx.gnm_random_graph(100, 50, seed=7); print(list(G.neighbors([NODE_NUMBER]])))"
+    # 81 is a leaf of 73
 
 # -- 2. NETWORK -----------------------------------------------
 class LorenzNetwork:
@@ -86,10 +93,46 @@ class LorenzNetwork:
 
 
 # -- 3. GRAPH LOADER ------------------------------------------
-def load_graph(cfg: Config) -> torch.Tensor:
-    G = nx.gnm_random_graph(cfg.n_nodes, cfg.n_edges, seed=cfg.graph_seed)
-    A = nx.to_numpy_array(G).astype(np.float32)
-    return torch.tensor(A, device=torch.device(cfg.device))
+def load_dti_laplacian(mat_path: str, device: torch.device) -> tuple[torch.Tensor, int]:
+    """
+    Load DTI_A.mat, build graph Laplacian, return L and node count n.
+
+    Replicates MATLAB exactly:
+        load('DTI_A.mat')
+        A = double(A)
+        L = diag(sum(A,2)) - A
+        gel = 0.5
+        H = [0 0 0; 0 1 0; 0 0 0]
+        gelLH = gel * kron(L, H)
+    [Page 28, full_.m_script.pdf]
+
+    We do NOT form the full kron(L,H) — instead we apply the H selection
+    (coupling only through X component) directly in lorenz_rhs_batched
+    by only subtracting the Laplacian term from dX.
+
+    Args
+    ----
+    mat_path : path to DTI_A.mat
+    device   : torch.device
+
+    Returns
+    -------
+    L_gpu : (n, n) float32 Laplacian tensor on device
+    n     : number of nodes
+    """
+    mat = loadmat(mat_path)
+
+    # DTI_A.mat stores the adjacency matrix as variable 'A'
+    # [Page 28, full_.m_script.pdf: "load('DTI_A.mat') A = double(A)"]
+    A = mat["A"].astype(np.float64)
+    n = A.shape[1]   # "n = size(A,2)" [Page 28, full_.m_script.pdf]
+
+    # Graph Laplacian
+    # [Page 28, full_.m_script.pdf: "L = diag(sum(A,2)) - A"]
+    L = np.diag(A.sum(axis=1)) - A
+
+    print(f"[dti]      loaded DTI_A.mat  n={n}  edges={int(A.sum()//2)}")
+    return torch.tensor(L, dtype=torch.float32, device=device), n
 
 
 # -- 4. AFFINE SLICE GRID SETUP --------------------------------
