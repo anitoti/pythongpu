@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from src.pythongpu.vps import main
+from pythongpu.processing.feature_extraction import main
 
 if __name__ == "__main__":
     main()

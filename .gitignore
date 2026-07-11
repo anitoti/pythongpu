@@ -1,1 +1,20 @@
+# Large data — stays on the server only
 data/
+nilearn_cache/
+
+# Python virtual environment
+.venv/
+venv/
+
+# Python caches / compiled
+__pycache__/
+*.pyc
+*.pyo
+
+# Large binary / result artifacts
+*.npy
+*.npz
+*.nii
+*.nii.gz
+*.mif
+*.png
