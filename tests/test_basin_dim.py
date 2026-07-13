@@ -1,5 +1,5 @@
 """
-Tests for src/pythongpu/processing/basin_dim.py (methods plan items 5/6 --
+Tests for pythongpu/processing/basin_dim.py (methods plan items 5/6 --
 basin mapping over an IC grid + basin-boundary box-counting), covering
 arbitrary BaseOscillator subclasses and topological null-model topologies.
 """

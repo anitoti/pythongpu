@@ -77,6 +77,7 @@ from tqdm import tqdm
 from pythongpu.utils import get_plot_path
 from pythongpu.networks.static_adjacency import load_dti_laplacian, rewire_edges
 from pythongpu.processing.box_counting import boxcount_2d_gpu, fractal_dimension, boxdiv2, extract_boundary
+from pythongpu.processing.basin_clustering import select_optimal_clusters, plot_selection
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -434,8 +435,13 @@ def main():
     ap.add_argument("--coupling",   type=float, default=0.5,
         help="gel — Laplacian coupling strength. "
              "[Page 28, full_.m_script.pdf: 'gel = 0.5']")
-    ap.add_argument("--k-clusters", type=int,   default=5,
-        help="K-means k. Paper optimal=8.")
+    ap.add_argument("--k-clusters", default="auto",
+        help="Number of basins K. 'auto' (default) selects K dynamically from "
+             "the VPS feature geometry via the Elbow+BIC+Silhouette consensus; "
+             "pass an integer to force a fixed K instead.")
+    ap.add_argument("--cluster-criterion", default="consensus",
+        choices=["consensus", "elbow", "bic", "silhouette"],
+        help="Model-selection criterion that sets K when --k-clusters=auto.")
     ap.add_argument("--boxdiv-p",   type=float, default=0.7,
         help="Boxdiv2 survival probability.")
     ap.add_argument("--rewire-n",   type=int,   default=5,
@@ -523,37 +529,32 @@ def main():
     vectors     = vectors_gpu.cpu().numpy()
     print(f"[vps]      shape = {vectors.shape}")
 
-    # ── GPU k-means ──────────────────────────────────────────────────────
-    print(f"[kmeans]   GPU Lloyd's  k={args.k_clusters} ...")
-    labels_gpu = kmeans_gpu(vectors_gpu, k=args.k_clusters)
-    labels     = labels_gpu.cpu().numpy().reshape(m, m)
-    print(f"[kmeans]   {args.k_clusters} basin labels assigned")
-
-    # ── Elbow curve ──────────────────────────────────────────────────────
-    print("[elbow]    k=2..15 ...")
-    inertias = []
-    D        = vectors_gpu.shape[1]
-    for k in tqdm(range(2, 16), desc="elbow"):
-        _labs = kmeans_gpu(vectors_gpu, k=k, n_iter=100)
-        _Xn   = (vectors_gpu - vectors_gpu.mean(0)) / \
-                (vectors_gpu.std(0) + 1e-8)
-        _c    = torch.zeros(k, D, device=device)
-        _cnt  = torch.zeros(k, device=device)
-        _c.scatter_add_(0, _labs.unsqueeze(1).expand(B, D), _Xn)
-        _cnt.scatter_add_(0, _labs, torch.ones(B, device=device))
-        _c   /= _cnt.clamp(min=1).unsqueeze(1)
-        inertias.append((_Xn - _c[_labs]).pow(2).sum().item())
-
-    fig_el, ax_el = plt.subplots(figsize=(6, 4))
-    ax_el.plot(range(2, 16), inertias, "o-", color="steelblue")
-    ax_el.set_xlabel("k  (number of clusters)")
-    ax_el.set_ylabel("Inertia")
-    ax_el.set_title("Elbow Method — Choose Optimal k")
-    ax_el.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(get_plot_path("lorenz_vps_clustering", "elbow_curve.png", args.outdir), dpi=150)
-    plt.close(fig_el)
-    print("[saved]    elbow_curve.png")
+    # ── Basin partition: dynamic K selection or user-forced K ────────────
+    # Replaces the previously hard-wired k with a data-driven estimate: the
+    # optimal number of basins is read off the VPS feature geometry via the
+    # Elbow (Kneedle), Gaussian-mixture BIC, and Silhouette criteria and their
+    # consensus, so K is no longer a transcribed constant.
+    if str(args.k_clusters).lower() == "auto":
+        print("[cluster]  dynamic K selection "
+              "(Elbow + BIC + Silhouette), k=2..15 ...")
+        sel = select_optimal_clusters(
+            vectors, k_min=2, k_max=15, criterion=args.cluster_criterion)
+        k_used = sel.best_k
+        labels = sel.labels.reshape(m, m).astype(np.int32)
+        print(f"[cluster]  elbow={sel.k_elbow}  BIC={sel.k_bic}  "
+              f"silhouette={sel.k_silhouette}  ->  K={k_used} "
+              f"(criterion={sel.criterion})")
+        plot_selection(
+            sel,
+            get_plot_path("lorenz_vps_clustering", "cluster_selection.png", args.outdir),
+            title=f"DTI_A Lorenz basins  coupling={p.coupling}")
+        print("[saved]    cluster_selection.png")
+    else:
+        k_used = int(args.k_clusters)
+        print(f"[kmeans]   GPU Lloyd's  k={k_used} (user-forced) ...")
+        labels_gpu = kmeans_gpu(vectors_gpu, k=k_used)
+        labels     = labels_gpu.cpu().numpy().reshape(m, m)
+        print(f"[kmeans]   {k_used} basin labels assigned")
 
     # ── Basin map ────────────────────────────────────────────────────────
     fig_bm, ax_bm = plt.subplots(figsize=(7, 6))
@@ -564,15 +565,14 @@ def main():
     ax_bm.set_xlabel(f"Node {p.slice_node_x}  X perturbation")
     ax_bm.set_ylabel(f"Node {p.slice_node_y}  X perturbation")
     ax_bm.set_title(
-    f"K-Means Basin Map (k={args.k_clusters})\n"
-    f"N={p.n_osc} coupling={p.coupling} grid={m}²"
+        f"K-Means Basin Map (k={k_used})\n"
+        f"N={p.n_osc} coupling={p.coupling} grid={m}²"
     )
     plt.colorbar(im, ax=ax_bm, label="Basin label")
     plt.tight_layout()
-    plt.close(fig_bm)
     plt.savefig(get_plot_path("lorenz_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
-    print(f"[saved] basin_map_kmeans.png")
-    # print("[sf"K-Means Basin Map  (k={args.k_clusters})\nN={p.n_osc} coupling={p.coupling} grid={m}²"aved]    basin_map_kmeans.png")
+    plt.close(fig_bm)
+    print(f"[saved]    basin_map_kmeans.png")
 
     # ── Basin boundary + box-counting ────────────────────────────────────
     boundary  = extract_boundary(labels)
@@ -656,6 +656,25 @@ def main():
     print("[saved]    rewired_adjacency.png")
 
     # ── Save ─────────────────────────────────────────────────────────────
+    # Embed the LIVE simulation configuration so the replotter renders the
+    # actual coupling and swept-node identities rather than stale hard-coded
+    # defaults (previously the replotter had no coupling to show → it fell
+    # back to an unlabelled / coupling=0 title).
+    config = dict(
+        coupling     = float(p.coupling),
+        slice_node_x = int(p.slice_node_x),
+        slice_node_y = int(p.slice_node_y),
+        n_osc        = int(p.n_osc),
+        grid_n       = int(m),
+        k_clusters   = int(k_used),
+        grid_lo      = -9.0,
+        grid_hi      = 9.0,
+        sigma        = float(p.sigma),
+        rho          = float(p.rho),
+        beta         = float(p.beta),
+        dt           = float(p.dt),
+        tmax         = float(p.tmax),
+    )
     np.savez_compressed(
         out_dir / "basin_data.npz",
         Xg          = Xg,
@@ -669,6 +688,7 @@ def main():
         r_squared   = np.array([r_sq]),
         A_dti       = A_dti,
         A_rewired   = A_rew,
+        config      = np.array(config, dtype=object),
     )
     print(f"[saved]    basin_data.npz  →  {out_dir / 'basin_data.npz'}")
     print(f"\n{'─'*55}")

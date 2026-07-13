@@ -1,5 +1,5 @@
 """
-Tests for src/pythongpu/processing/chimera_classifier.py (methods plan item 4).
+Tests for pythongpu/processing/chimera_classifier.py (methods plan item 4).
 """
 
 import numpy as np

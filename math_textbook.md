@@ -76,7 +76,7 @@ Throughout, "trajectory tensors" follow the repository convention `(T, B, D, N)`
 
 ## I.1 The general coupled-oscillator field
 
-Every dynamical model in `src/pythongpu/oscillators/` is a special case of a single autonomous vector field on the product state space $\big(\mathbb{R}^{D}\big)^{N}$. Writing the state of node $i$ as $\mathbf{u}_i\in\mathbb{R}^D$, the network obeys
+Every dynamical model in `pythongpu/oscillators/` is a special case of a single autonomous vector field on the product state space $\big(\mathbb{R}^{D}\big)^{N}$. Writing the state of node $i$ as $\mathbf{u}_i\in\mathbb{R}^D$, the network obeys
 
 $$
 \dot{\mathbf u}_i \;=\; \mathbf F(\mathbf u_i)\;-\;\sigma\sum_{j=1}^{N} L_{ij}\,\mathbf H\,\mathbf u_j,
@@ -523,7 +523,7 @@ where $F_{\chi^2_{(1)}}$ is the chi-squared CDF (`_cmi_significant`). This conve
 
 # Part III — Multifractal Detrended Fluctuation Analysis
 
-*Implemented in `src/pythongpu/processing/multifractal_analysis.py`; run on `data/processed/100307/parcellated_timeseries.csv` ($N=240$ ROIs $\times\;T=1200$ samples), producing `multifractal_results.csv` and `multifractal_spectrum.png`.*
+*Implemented in `pythongpu/processing/multifractal_analysis.py`; run on `data/processed/100307/parcellated_timeseries.csv` ($N=240$ ROIs $\times\;T=1200$ samples), producing `multifractal_results.csv` and `multifractal_spectrum.png`.*
 
 ## III.1 Motivation and overview
 
@@ -784,4 +784,4 @@ The output CSV is in long format with columns `roi, q, hurst, tau, alpha, f_alph
 
 ---
 
-*This manual is a living document: as `src/pythongpu` evolves, keep each boxed equation and the correspondence table in §III.10 synchronized with the code they describe.*
+*This manual is a living document: as `pythongpu` evolves, keep each boxed equation and the correspondence table in §III.10 synchronized with the code they describe.*

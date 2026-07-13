@@ -9,9 +9,9 @@
 #  box-counting log-log, and elbow curve from saved state.
 #
 #  Usage:
-#    python3 src/pythongpu/plot_lorenz_basins.py
-#    python3 src/pythongpu/plot_lorenz_basins.py --timestamp 20260629_125200
-#    python3 src/pythongpu/plot_lorenz_basins.py --outdir /path/to/output
+#    python3 -m pythongpu.visualization.plot_lorenz_basins
+#    python3 -m pythongpu.visualization.plot_lorenz_basins --timestamp 20260629_125200
+#    python3 -m pythongpu.visualization.plot_lorenz_basins --outdir /path/to/output
 # ============================================================
 
 import os
@@ -28,6 +28,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from pythongpu.utils import get_plot_path
+from pythongpu.networks.desikan_killiany import labels_for
 
 
 # -- HELPERS ----------------------------------------------------
@@ -104,20 +105,53 @@ C_pairs = vectors.shape[1] // 2
 # N = (1 + sqrt(1 + 8*C_pairs)) / 2
 N_osc = int((1 + np.sqrt(1 + 8 * C_pairs)) / 2)
 
-print(f"[data]     grid={m}²  N={N_osc}  D_f={fractal_dim:.4f}  R²={r_squared:.4f}")
+# -- LIVE SIMULATION CONFIG ------------------------------------
+# Read the configuration the producing sweep embedded in the .npz so every
+# title/axis reflects the ACTUAL coupling and swept-node identities. Older
+# archives without a `config` record fall back to sentinels and the plot is
+# annotated as such rather than silently mislabelling coupling as 0.
+if "config" in data.files:
+    cfg = data["config"].item()
+    coupling  = float(cfg.get("coupling", float("nan")))
+    node_x    = int(cfg.get("slice_node_x", -1))
+    node_y    = int(cfg.get("slice_node_y", -1))
+    grid_lo   = float(cfg.get("grid_lo", -9.0))
+    grid_hi   = float(cfg.get("grid_hi",  9.0))
+    N_osc     = int(cfg.get("n_osc", N_osc))
+    coupling_str = f"coupling={coupling:g}"
+    config_present = True
+else:
+    coupling, node_x, node_y = float("nan"), -1, -1
+    grid_lo, grid_hi = -9.0, 9.0
+    coupling_str = "coupling=?? (legacy npz — no config record)"
+    config_present = False
+
+# Desikan-Killiany region labels for the two swept nodes (indices authoritative).
+dk = labels_for(N_osc)
+lbl_x = dk[node_x] if 0 <= node_x < len(dk) else f"node {node_x}"
+lbl_y = dk[node_y] if 0 <= node_y < len(dk) else f"node {node_y}"
+axis_x = f"Node {node_x} ({lbl_x})  X perturbation"
+axis_y = f"Node {node_y} ({lbl_y})  X perturbation"
+extent = [grid_lo, grid_hi, grid_lo, grid_hi]
+
+print(f"[data]     grid={m}²  N={N_osc}  {coupling_str}  "
+      f"nodes=({node_x},{node_y})  D_f={fractal_dim:.4f}  R²={r_squared:.4f}")
+if not config_present:
+    print("[warn]     no live config in npz; regenerate with the updated "
+          "lorenz_sweep.py to embed coupling + swept-node ids.")
 
 # -- 1. BASIN MAP (K-MEANS) ------------------------------------
 print("\nPlotting basin map ...")
 fig_bm, ax_bm = plt.subplots(figsize=(7, 6))
 im = ax_bm.imshow(
     labels, origin="lower", cmap="tab20",
-    extent=[-9.0, 9.0, -9.0, 9.0], interpolation="nearest",
+    extent=extent, interpolation="nearest",
 )
-ax_bm.set_xlabel("Node 28  X perturbation")
-ax_bm.set_ylabel("Node 79  X perturbation")
+ax_bm.set_xlabel(axis_x)
+ax_bm.set_ylabel(axis_y)
 ax_bm.set_title(
     f"K-Means Basin Map (k={len(np.unique(labels))})\n"
-    f"N={N_osc} grid={m}²"
+    f"N={N_osc}  {coupling_str}  grid={m}²"
 )
 plt.colorbar(im, ax=ax_bm, label="Basin label")
 plt.tight_layout()
@@ -131,13 +165,13 @@ print("Plotting basin boundary ...")
 fig_bd, ax_bd = plt.subplots(figsize=(7, 6))
 ax_bd.imshow(
     boundary, origin="lower", cmap="binary",
-    extent=[-9.0, 9.0, -9.0, 9.0], interpolation="nearest",
+    extent=extent, interpolation="nearest",
 )
-ax_bd.set_xlabel("Node 28  X perturbation")
-ax_bd.set_ylabel("Node 79  X perturbation")
+ax_bd.set_xlabel(axis_x)
+ax_bd.set_ylabel(axis_y)
 ax_bd.set_title(
     f"Basin Boundary — DTI_A\n"
-    f"N={N_osc}  grid={m}²"
+    f"N={N_osc}  {coupling_str}  grid={m}²"
 )
 plt.tight_layout()
 bd_path = get_plot_path("plot_lorenz_basins", f"basin_boundary_{ts}.png", SAVE_DIR)
@@ -178,6 +212,8 @@ print(f"[saved]    {bc_path}")
 print(f"\n-- Basin Statistics ------------------------------")
 print(f"Grid resolution  : {m}x{m} = {B} initial conditions")
 print(f"Number of nodes  : {N_osc}")
+print(f"Coupling         : {coupling_str}")
+print(f"Swept nodes      : {node_x} ({lbl_x})  vs  {node_y} ({lbl_y})")
 print(f"Fractal dim D_f  : {fractal_dim:.4f}  (R² = {r_squared:.4f})")
 print(f"K-means K        : {len(np.unique(labels))} basins")
 print(f"Timestamp        : {ts}")

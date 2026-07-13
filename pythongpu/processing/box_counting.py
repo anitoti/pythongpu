@@ -11,9 +11,12 @@ the Lorenz variants' original behavior exactly).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 import torch.nn.functional as F
+from scipy.ndimage import maximum_filter, minimum_filter
 
 
 def boxcount_2d_gpu(
@@ -89,6 +92,84 @@ def fractal_dimension(
     ss_tot    = np.sum((log_n - log_n.mean()) ** 2)
     r_sq      = 1.0 - ss_res / (ss_tot + 1e-12)
     return float(-coeffs[0]), float(r_sq)
+
+
+@dataclass
+class UncertaintyExponent:
+    """
+    Grebogi–McDonald–Ott–Yorke uncertainty-exponent estimate on a labelled
+    initial-condition slice.
+
+    gamma      : the scaling exponent γ of the ε-uncertain fraction f(ε) ∼ ε^γ.
+    r_squared  : coefficient of determination of the log f vs log ε fit.
+    D_f        : the boundary dimension recovered from the codimension identity
+                 D_f = d − γ  (d = embedding dimension of the slice). This is a
+                 grid-independent cross-check of the box-counting D_f: γ is a
+                 scaling slope and so does not inherit the discretisation bias
+                 of a raw pixel count.
+    d          : embedding dimension of the slice (2 for a 2-D IC slice).
+    radii      : the perturbation radii ε (pixels) that carried scaling info.
+    f          : the ε-uncertain fraction at each retained radius.
+    """
+    gamma: float | None
+    r_squared: float | None
+    D_f: float | None
+    d: int
+    radii: np.ndarray
+    f: np.ndarray
+
+
+def uncertainty_exponent(
+    labels : np.ndarray,
+    radii  : tuple[int, ...] = (1, 2, 3, 4, 6, 8, 12, 16),
+    d      : int = 2,
+) -> UncertaintyExponent:
+    """
+    Estimate the uncertainty exponent γ of a basin partition and, from it, the
+    boundary dimension via  D_f = d − γ.
+
+    An initial condition is ε-uncertain if an L∞ perturbation of up to ε pixels
+    can move it into a different basin — i.e. if the (2ε+1)² neighbourhood spans
+    more than one integer label. Since the labels are integers, that is exactly
+    ``maximum_filter(labels, 2ε+1) ≠ minimum_filter(labels, 2ε+1)``. The fraction
+    of such points obeys the Grebogi–McDonald–Ott–Yorke scaling law
+    f(ε) ∼ ε^γ, so γ is the slope of log f against log ε over the radii where
+    0 < f < 1 (a saturated f = 1 or empty f = 0 carries no scaling information).
+
+    Because γ is a *scaling exponent* rather than a box tally, it is independent
+    of the grid resolution used to sample the slice — refining the grid rescales
+    ε uniformly and leaves the slope unchanged. The dual dimension D_f = d − γ is
+    therefore a grid-independent counterpart to :func:`fractal_dimension`.
+
+    Returns an :class:`UncertaintyExponent`; ``gamma`` (and ``D_f``) are None when
+    fewer than two radii fall in the informative 0 < f < 1 band, e.g. a slice
+    that collapses to a single basin.
+    """
+    lab = np.asarray(labels).astype(np.int32)
+    eps_used, f_used = [], []
+    for eps in radii:
+        size = 2 * int(eps) + 1
+        hi = maximum_filter(lab, size=size, mode="nearest")
+        lo = minimum_filter(lab, size=size, mode="nearest")
+        frac = float((hi != lo).mean())
+        if 0.0 < frac < 1.0:
+            eps_used.append(float(eps))
+            f_used.append(frac)
+    eps_arr = np.array(eps_used)
+    f_arr = np.array(f_used)
+    if len(eps_used) < 2:
+        return UncertaintyExponent(None, None, None, d, eps_arr, f_arr)
+
+    log_e = np.log(eps_arr)
+    log_f = np.log(f_arr)
+    slope, intercept = np.polyfit(log_e, log_f, deg=1)
+    resid = log_f - (slope * log_e + intercept)
+    ss_res = float(np.sum(resid ** 2))
+    ss_tot = float(np.sum((log_f - log_f.mean()) ** 2))
+    r_sq = 1.0 - ss_res / (ss_tot + 1e-12)
+    gamma = float(slope)
+    return UncertaintyExponent(gamma, float(r_sq), float(d - gamma), d,
+                               eps_arr, f_arr)
 
 
 def boxdiv2(c: np.ndarray, p: float) -> np.ndarray:
