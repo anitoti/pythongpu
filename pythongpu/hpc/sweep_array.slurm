@@ -23,14 +23,8 @@
 #    sbatch --array=0-40 \
 #           --export=ALL,K_MIN=0.45,K_MAX=0.65,GRID_N=361 \
 #           pythongpu/hpc/sweep_array.slurm
-#
-#  The array upper bound sets the sampling density: for a linear sweep of
-#  M coefficients, submit --array=0-(M-1). SLURM_ARRAY_TASK_COUNT is read
-#  at run time to normalise the affine map, so no edit is required here.
-# ============================================================================
-
-#SBATCH --job-name=lorenz_coupling_array
-#SBATCH --partition=gpu               # GPU partition (gpu-21-28, Tesla x4);
+#SBATCH --job-name=coupling-sweep
+#SBATCH --partition=gpu               # GPU partition (gpu-21-28, Tesla V100 x4);
                                       # substitute 'dev' for brief validation.
 #SBATCH --output=logs/sweep_%A_%a.out # %A = array job id, %a = task index
 #SBATCH --error=logs/sweep_%A_%a.err
@@ -106,7 +100,7 @@ python3 -m pythongpu.pipeline.lorenz_sweep \
 # compile_animation.slurm consumes FRAME_GALLERY as a contiguous, zero-padded
 # image sequence. The basin map is copied (not moved) so the complete
 # per-task morphometry — basin_data.npz, boundary, box-counting fit — remains
-# archived under TASK_OUTDIR.
+# archived under TASK_OUTDIR.  
 FRAME_GALLERY="${RESULTS_ROOT}/frames"
 mkdir -p "$FRAME_GALLERY"
 cp "${TASK_OUTDIR}/basin_map_kmeans.png" \
