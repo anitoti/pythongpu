@@ -6,6 +6,9 @@ nilearn_cache/
 .venv/
 venv/
 
+# Claude Code local config
+.claude/
+
 # Python caches / compiled
 __pycache__/
 *.pyc
