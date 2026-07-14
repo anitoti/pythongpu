@@ -151,7 +151,9 @@ def count_from_integration(coupling: float, grid_n: int, grid_lo: float,
         x = rk4_step_batched(x, L_gpu, p)
         if step % record_stride == 0:
             Xc = x[..., 0]
-            s1 += Xc; s2 += Xc * Xc; sa += Xc.abs()
+            s1 += Xc
+            s2 += Xc * Xc
+            sa += Xc.abs()
             cnt += 1
     if device.type == "cuda":
         torch.cuda.synchronize()
@@ -185,7 +187,8 @@ def _discover(root, npz_globs):
         rp = p.resolve()
         if rp in seen or re.search(r"basin_data_\w+\.npz$", p.name):
             continue
-        seen.add(rp); uniq.append(p)
+        seen.add(rp)
+        uniq.append(p)
     return uniq
 
 
@@ -233,7 +236,8 @@ def main(argv=None) -> int:
         except KeyError as exc:
             print(f"  [skip]  {npz_path}: {exc}")
             continue
-        _report(res); ok = True
+        _report(res)
+        ok = True
     return 0 if ok else 1
 
 

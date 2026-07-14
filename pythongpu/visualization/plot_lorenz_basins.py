@@ -18,7 +18,6 @@ import os
 import re
 import glob
 import argparse
-from pathlib import Path
 from datetime import datetime
 
 import numpy as np
@@ -26,6 +25,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.colors import BoundaryNorm, ListedColormap
 
 from pythongpu.utils import get_plot_path
 from pythongpu.networks.desikan_killiany import labels_for
@@ -143,10 +143,6 @@ if not config_present:
 # -- 1. BASIN MAP (K-MEANS) ------------------------------------
 print("\nPlotting basin map ...")
 fig_bm, ax_bm = plt.subplots(figsize=(7, 6))
-# Discrete colormap: one colour per basin actually present, so the colorbar
-# shows exactly k swatches instead of the continuous tab20 ramp (which drew ~20
-# interpolated bands and read as far more basins than exist).
-from matplotlib.colors import BoundaryNorm, ListedColormap
 uniq = np.unique(labels)
 k_present = len(uniq)
 cmap_bm = ListedColormap(plt.cm.tab20.colors[:k_present])
@@ -220,7 +216,7 @@ print(f"[saved]    {bc_path}")
 # main pipeline, not a re-plot from saved data.
 
 # -- 5. SUMMARY STATS -------------------------------------------
-print(f"\n-- Basin Statistics ------------------------------")
+print("\n-- Basin Statistics ------------------------------")
 print(f"Grid resolution  : {m}x{m} = {B} initial conditions")
 print(f"Number of nodes  : {N_osc}")
 print(f"Coupling         : {coupling_str}")

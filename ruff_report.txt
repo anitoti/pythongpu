@@ -1,0 +1,963 @@
+F541 [*] f-string without any placeholders
+   --> aggregate_fractal_sweep.py:180:15
+    |
+178 |           f"{fps} fps  ->  {dur:.2f} s")
+179 |     if dur < 2:
+180 |         print(f"[hint]     still a short clip; raise --hold or set "
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+181 |               f"--duration 10 for a smooth ~10 s sweep.")
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> aggregate_fractal_sweep.py:181:15
+    |
+179 |     if dur < 2:
+180 |         print(f"[hint]     still a short clip; raise --hold or set "
+181 |               f"--duration 10 for a smooth ~10 s sweep.")
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+182 |
+183 |     if shutil.which("ffmpeg"):
+    |
+help: Remove extraneous `f` prefix
+
+E702 Multiple statements on one line (semicolon)
+   --> analyze_wada.py:232:31
+    |
+230 |                  f"Wada coverage = {rec['wada_fraction']*100:.1f}%")
+231 |     if rec["extent"] is not None:
+232 |         ax.set_xlabel("$x_0$"); ax.set_ylabel("$y_0$")
+    |                               ^
+233 |     else:
+234 |         ax.set_xlabel("grid column"); ax.set_ylabel("grid row")
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> analyze_wada.py:234:37
+    |
+232 |         ax.set_xlabel("$x_0$"); ax.set_ylabel("$y_0$")
+233 |     else:
+234 |         ax.set_xlabel("grid column"); ax.set_ylabel("grid row")
+    |                                     ^
+235 |     ax.plot([], [], "s", color="#d62728", label="Wada boundary")
+236 |     ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> analyze_wada.py:264:21
+    |
+262 |     fig.tight_layout()
+263 |     out = out_dir / f"{rec['stem']}_wada.png"
+264 |     fig.savefig(out); plt.close(fig)
+    |                     ^
+265 |     return out
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> analyze_wada.py:284:21
+    |
+282 |     fig.tight_layout()
+283 |     out = out_dir / "wada_coverage_vs_K.png"
+284 |     fig.savefig(out); plt.close(fig)
+    |                     ^
+285 |     return out
+    |
+
+F401 [*] `torch` imported but unused
+ --> pythongpu/networks/random_graphs.py:2:8
+  |
+1 | import networkx as nx
+2 | import torch
+  |        ^^^^^
+3 | import numpy as np
+4 | from pythongpu.utils import get_laplacian, get_plot_path
+  |
+help: Remove unused import: `torch`
+
+F401 [*] `numpy` imported but unused
+ --> pythongpu/networks/random_graphs.py:3:17
+  |
+1 | import networkx as nx
+2 | import torch
+3 | import numpy as np
+  |                 ^^
+4 | from pythongpu.utils import get_laplacian, get_plot_path
+5 | import matplotlib # this and Agg dont open a new window in the server, so just a file saves
+  |
+help: Remove unused import: `numpy`
+
+E741 Ambiguous variable name: `I`
+  --> pythongpu/oscillators/hindmarsh_rose.py:40:9
+   |
+38 |         s=4.0,
+39 |         x_rest=-1.6,
+40 |         I=3.2,
+   |         ^
+41 |         coupling=0.1,
+42 |         device="cpu",
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:42:1
+   |
+40 |     sys.path.insert(0, str(_REPO_ROOT))
+41 |
+42 | import numpy as np
+   | ^^^^^^^^^^^^^^^^^^
+43 | import torch
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:43:1
+   |
+42 | import numpy as np
+43 | import torch
+   | ^^^^^^^^^^^^
+44 |
+45 | import matplotlib
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:45:1
+   |
+43 | import torch
+44 |
+45 | import matplotlib
+   | ^^^^^^^^^^^^^^^^^
+46 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+47 | import matplotlib.pyplot as plt
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:47:1
+   |
+45 | import matplotlib
+46 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+47 | import matplotlib.pyplot as plt
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+48 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:48:1
+   |
+46 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+47 | import matplotlib.pyplot as plt
+48 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+49 |
+50 | import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:50:1
+   |
+48 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+49 |
+50 | import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+   | ^^^^^^^^^^
+51 |
+52 | from pythongpu.pipeline.kuramoto_sweep import (
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:52:1
+   |
+50 |   import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+51 |
+52 | / from pythongpu.pipeline.kuramoto_sweep import (
+53 | |     kuramoto_rhs,
+54 | |     rk4_step,
+55 | |     order_parameter,
+56 | |     build_ic_grid,
+57 | |     Config as SweepConfig,
+58 | | )
+   | |_^
+59 |   from pythongpu.processing.box_counting import (
+60 |       extract_boundary,
+   |
+
+F401 [*] `pythongpu.pipeline.kuramoto_sweep.kuramoto_rhs` imported but unused
+  --> pythongpu/pipeline/animate_coupling.py:53:5
+   |
+52 | from pythongpu.pipeline.kuramoto_sweep import (
+53 |     kuramoto_rhs,
+   |     ^^^^^^^^^^^^
+54 |     rk4_step,
+55 |     order_parameter,
+   |
+help: Remove unused import: `pythongpu.pipeline.kuramoto_sweep.kuramoto_rhs`
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/animate_coupling.py:59:1
+   |
+57 |       Config as SweepConfig,
+58 |   )
+59 | / from pythongpu.processing.box_counting import (
+60 | |     extract_boundary,
+61 | |     boxcount_2d_gpu,
+62 | |     fractal_dimension,
+63 | | )
+   | |_^
+   |
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/box_counting_kuramoto.py:135:7
+    |
+133 | print(f"\nFractal dimension  D_f = {D_f:.4f}")
+134 | print(f"Fit R²              = {R2:.4f}")
+135 | print(f"Interpretation      : ", end="")
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+136 | if   D_f < 1.05: print("smooth curve — likely under-resolved or K too small")
+137 | elif D_f > 1.95: print("space-filling — likely noise, not fractal structure")
+    |
+help: Remove extraneous `f` prefix
+
+E701 Multiple statements on one line (colon)
+   --> pythongpu/pipeline/box_counting_kuramoto.py:136:16
+    |
+134 | print(f"Fit R²              = {R2:.4f}")
+135 | print(f"Interpretation      : ", end="")
+136 | if   D_f < 1.05: print("smooth curve — likely under-resolved or K too small")
+    |                ^
+137 | elif D_f > 1.95: print("space-filling — likely noise, not fractal structure")
+138 | else:            print(f"fractal boundary  ✓  ({1:.0f} < {D_f:.3f} < {2:.0f})")
+    |
+
+E701 Multiple statements on one line (colon)
+   --> pythongpu/pipeline/box_counting_kuramoto.py:137:16
+    |
+135 | print(f"Interpretation      : ", end="")
+136 | if   D_f < 1.05: print("smooth curve — likely under-resolved or K too small")
+137 | elif D_f > 1.95: print("space-filling — likely noise, not fractal structure")
+    |                ^
+138 | else:            print(f"fractal boundary  ✓  ({1:.0f} < {D_f:.3f} < {2:.0f})")
+    |
+
+E701 Multiple statements on one line (colon)
+   --> pythongpu/pipeline/box_counting_kuramoto.py:138:5
+    |
+136 | if   D_f < 1.05: print("smooth curve — likely under-resolved or K too small")
+137 | elif D_f > 1.95: print("space-filling — likely noise, not fractal structure")
+138 | else:            print(f"fractal boundary  ✓  ({1:.0f} < {D_f:.3f} < {2:.0f})")
+    |     ^
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> pythongpu/pipeline/box_counting_kuramoto.py:159:22
+    |
+157 | ticks      = [-np.pi, -np.pi/2, 0, np.pi/2, np.pi]
+158 | ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
+159 | ax0.set_xticks(ticks); ax0.set_xticklabels(ticklabels)
+    |                      ^
+160 | ax0.set_yticks(ticks); ax0.set_yticklabels(ticklabels)
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> pythongpu/pipeline/box_counting_kuramoto.py:160:22
+    |
+158 | ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
+159 | ax0.set_xticks(ticks); ax0.set_xticklabels(ticklabels)
+160 | ax0.set_yticks(ticks); ax0.set_yticklabels(ticklabels)
+    |                      ^
+161 |
+162 | # ── 4b. Box-counting log-log plot ────────────────────────────
+    |
+
+F401 [*] `scipy.io.loadmat` imported but unused
+  --> pythongpu/pipeline/hr_sweep.py:63:22
+   |
+61 | import numpy as np
+62 | import torch
+63 | from scipy.io import loadmat
+   |                      ^^^^^^^
+64 | from tqdm import tqdm
+   |
+help: Remove unused import: `scipy.io.loadmat`
+
+E741 Ambiguous variable name: `I`
+   --> pythongpu/pipeline/hr_sweep.py:105:5
+    |
+103 |     r               : float = 0.006     # slow adaptation time-constant
+104 |     x_rest          : float = -1.6      # x1 resting membrane potential
+105 |     I               : float = 3.2       # external drive — chaotic window
+    |     ^
+106 |     coupling        : float = 0.5       # gel — Laplacian coupling on X
+107 |     dt              : float = 0.05
+    |
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:412:11
+    |
+410 |     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+411 |     print(f"[device]   {device}")
+412 |     print(f"[variant]  Hindmarsh–Rose X-coupled  "
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+413 |           f"(chaotic-bursting a=1 b=3 c=1 d=5 s=4 r=0.006 I=3.2)")
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:413:11
+    |
+411 |     print(f"[device]   {device}")
+412 |     print(f"[variant]  Hindmarsh–Rose X-coupled  "
+413 |           f"(chaotic-bursting a=1 b=3 c=1 d=5 s=4 r=0.006 I=3.2)")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+414 |
+415 |     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:523:11
+    |
+521 |     plt.savefig(get_plot_path("hr_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
+522 |     plt.close(fig_bm)
+523 |     print(f"[saved]    basin_map_kmeans.png")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+524 |
+525 |     # ── Basin boundary + box-counting ────────────────────────────────────
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:531:9
+    |
+529 |     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+530 |     print(
+531 |         f"           D_f ≈ 1.0 → smooth curve\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+532 |         f"           D_f ≈ 2.0 → space-filling\n"
+533 |         f"           Expected chimera range: ~1.2–1.8"
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:532:9
+    |
+530 |     print(
+531 |         f"           D_f ≈ 1.0 → smooth curve\n"
+532 |         f"           D_f ≈ 2.0 → space-filling\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+533 |         f"           Expected chimera range: ~1.2–1.8"
+534 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/hr_sweep.py:533:9
+    |
+531 |         f"           D_f ≈ 1.0 → smooth curve\n"
+532 |         f"           D_f ≈ 2.0 → space-filling\n"
+533 |         f"           Expected chimera range: ~1.2–1.8"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+534 |     )
+    |
+help: Remove extraneous `f` prefix
+
+E401 [*] Multiple imports on one line
+  --> pythongpu/pipeline/kuramoto_sweep.py:12:1
+   |
+10 | # CUDA_VISIBLE_DEVICES=0 /usr/bin/python3 /home/atotilca/pythongpu/kuramoto_basins.py
+11 |
+12 | import os, math
+   | ^^^^^^^^^^^^^^^
+13 | import numpy as np
+14 | import torch
+   |
+help: Split imports
+
+F601 Dictionary key literal `"theta"` repeated
+   --> pythongpu/pipeline/kuramoto_sweep.py:228:9
+    |
+226 |         "Y"        : Y,                                    # (m, m) grid coords
+227 |         "theta"    : theta.cpu().numpy(),
+228 |         "theta"    : theta.cpu().numpy(),
+    |         ^^^^^^^
+229 |         "R"        : R.reshape(cfg.sweep_points,
+230 |                                cfg.sweep_points),          # (m, m) order param
+    |
+help: Remove repeated key literal `"theta"`
+
+F401 [*] `math` imported but unused
+  --> pythongpu/pipeline/lorenz_basins_sweep.py:19:8
+   |
+18 | import os
+19 | import math
+   |        ^^^^
+20 | import numpy as np
+21 | import torch
+   |
+help: Remove unused import: `math`
+
+F401 [*] `networkx` imported but unused
+  --> pythongpu/pipeline/lorenz_basins_sweep.py:22:20
+   |
+20 | import numpy as np
+21 | import torch
+22 | import networkx as nx
+   |                    ^^
+23 | from dataclasses import dataclass, asdict
+   |
+help: Remove unused import: `networkx`
+
+F401 [*] `pythongpu.networks.static_adjacency.load_dti_laplacian` imported but unused
+  --> pythongpu/pipeline/lorenz_basins_sweep.py:26:49
+   |
+25 | from pythongpu.oscillators.lorenz import LorenzNetwork
+26 | from pythongpu.networks.static_adjacency import load_dti_laplacian
+   |                                                 ^^^^^^^^^^^^^^^^^^
+   |
+help: Remove unused import: `pythongpu.networks.static_adjacency.load_dti_laplacian`
+
+F841 Local variable `dev` is assigned to but never used
+   --> pythongpu/pipeline/lorenz_basins_sweep.py:103:5
+    |
+101 | # -- 3. MAIN INTEGRATION LOOP ---------------------------------
+102 | def run_sweep(cfg: Config):
+103 |     dev = torch.device(cfg.device)
+    |     ^^^
+104 |     A   = load_graph(cfg)
+    |
+help: Remove assignment to unused variable `dev`
+
+F821 Undefined name `load_graph`
+   --> pythongpu/pipeline/lorenz_basins_sweep.py:104:11
+    |
+102 | def run_sweep(cfg: Config):
+103 |     dev = torch.device(cfg.device)
+104 |     A   = load_graph(cfg)
+    |           ^^^^^^^^^^
+105 |
+106 |     # Build Laplacian (unweighted)
+    |
+
+F401 [*] `scipy.io.loadmat` imported but unused
+  --> pythongpu/pipeline/lorenz_sweep.py:74:22
+   |
+72 | import numpy as np
+73 | import torch
+74 | from scipy.io import loadmat
+   |                      ^^^^^^^
+75 | from tqdm import tqdm
+   |
+help: Remove unused import: `scipy.io.loadmat`
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep.py:575:11
+    |
+573 |     plt.savefig(get_plot_path("lorenz_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
+574 |     plt.close(fig_bm)
+575 |     print(f"[saved]    basin_map_kmeans.png")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+576 |
+577 |     # ── Basin boundary + box-counting ────────────────────────────────────
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep.py:583:9
+    |
+581 |     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+582 |     print(
+583 |         f"           D_f ≈ 1.0 → smooth curve\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+584 |         f"           D_f ≈ 2.0 → space-filling\n"
+585 |         f"           Expected chimera range: ~1.2–1.8"
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep.py:584:9
+    |
+582 |     print(
+583 |         f"           D_f ≈ 1.0 → smooth curve\n"
+584 |         f"           D_f ≈ 2.0 → space-filling\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+585 |         f"           Expected chimera range: ~1.2–1.8"
+586 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep.py:585:9
+    |
+583 |         f"           D_f ≈ 1.0 → smooth curve\n"
+584 |         f"           D_f ≈ 2.0 → space-filling\n"
+585 |         f"           Expected chimera range: ~1.2–1.8"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+586 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F401 [*] `scipy.io.loadmat` imported but unused
+  --> pythongpu/pipeline/lorenz_sweep_xcoupled.py:72:22
+   |
+70 | import numpy as np
+71 | import torch
+72 | from scipy.io import loadmat
+   |                      ^^^^^^^
+73 | from tqdm import tqdm
+   |
+help: Remove unused import: `scipy.io.loadmat`
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_xcoupled.py:307:11
+    |
+305 |     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+306 |     print(f"[time]     {timestamp}")
+307 |     print(f"[variant]  X-coupled  (f[...,0] -= gel * L @ X)")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+308 |
+309 |     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_xcoupled.py:402:9
+    |
+400 |     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+401 |     print(
+402 |         f"           D_f ≈ 1.0 → smooth  |  "
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+403 |         f"D_f ≈ 2.0 → space-filling  |  "
+404 |         f"chimera range: ~1.2–1.8"
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_xcoupled.py:403:9
+    |
+401 |     print(
+402 |         f"           D_f ≈ 1.0 → smooth  |  "
+403 |         f"D_f ≈ 2.0 → space-filling  |  "
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+404 |         f"chimera range: ~1.2–1.8"
+405 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_xcoupled.py:404:9
+    |
+402 |         f"           D_f ≈ 1.0 → smooth  |  "
+403 |         f"D_f ≈ 2.0 → space-filling  |  "
+404 |         f"chimera range: ~1.2–1.8"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+405 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F401 [*] `scipy.io.loadmat` imported but unused
+  --> pythongpu/pipeline/lorenz_sweep_z.py:47:22
+   |
+45 | import numpy as np
+46 | import torch
+47 | from scipy.io import loadmat
+   |                      ^^^^^^^
+48 | from tqdm import tqdm
+   |
+help: Remove unused import: `scipy.io.loadmat`
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_z.py:286:11
+    |
+284 |     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+285 |     print(f"[time]     {timestamp}")
+286 |     print(f"[variant]  Z-coupled  (f[...,2] -= gel * L @ Z)")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+287 |
+288 |     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_z.py:383:9
+    |
+381 |     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+382 |     print(
+383 |         f"           D_f ≈ 1.0 → smooth  |  "
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+384 |         f"D_f ≈ 2.0 → space-filling  |  "
+385 |         f"chimera range: ~1.2–1.8"
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_z.py:384:9
+    |
+382 |     print(
+383 |         f"           D_f ≈ 1.0 → smooth  |  "
+384 |         f"D_f ≈ 2.0 → space-filling  |  "
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+385 |         f"chimera range: ~1.2–1.8"
+386 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/lorenz_sweep_z.py:385:9
+    |
+383 |         f"           D_f ≈ 1.0 → smooth  |  "
+384 |         f"D_f ≈ 2.0 → space-filling  |  "
+385 |         f"chimera range: ~1.2–1.8"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+386 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F401 [*] `scipy.io.loadmat` imported but unused
+  --> pythongpu/pipeline/rossler_sweep.py:62:22
+   |
+60 | import numpy as np
+61 | import torch
+62 | from scipy.io import loadmat
+   |                      ^^^^^^^
+63 | from tqdm import tqdm
+   |
+help: Remove unused import: `scipy.io.loadmat`
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/rossler_sweep.py:407:11
+    |
+405 |     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+406 |     print(f"[device]   {device}")
+407 |     print(f"[variant]  Rössler X-coupled  (canonical chaotic a=0.2 b=0.2 c=5.7)")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+408 |
+409 |     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/rossler_sweep.py:524:11
+    |
+522 |     plt.savefig(get_plot_path("rossler_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
+523 |     plt.close(fig_bm)
+524 |     print(f"[saved]    basin_map_kmeans.png")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+525 |
+526 |     # ── Basin boundary + box-counting ────────────────────────────────────
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/rossler_sweep.py:532:9
+    |
+530 |     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+531 |     print(
+532 |         f"           D_f ≈ 1.0 → smooth curve\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+533 |         f"           D_f ≈ 2.0 → space-filling\n"
+534 |         f"           Expected chimera range: ~1.2–1.8"
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/rossler_sweep.py:533:9
+    |
+531 |     print(
+532 |         f"           D_f ≈ 1.0 → smooth curve\n"
+533 |         f"           D_f ≈ 2.0 → space-filling\n"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+534 |         f"           Expected chimera range: ~1.2–1.8"
+535 |     )
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/pipeline/rossler_sweep.py:534:9
+    |
+532 |         f"           D_f ≈ 1.0 → smooth curve\n"
+533 |         f"           D_f ≈ 2.0 → space-filling\n"
+534 |         f"           Expected chimera range: ~1.2–1.8"
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+535 |     )
+    |
+help: Remove extraneous `f` prefix
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:60:1
+   |
+58 |     sys.path.insert(0, str(_REPO_ROOT))
+59 |
+60 | import numpy as np
+   | ^^^^^^^^^^^^^^^^^^
+61 | import torch
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:61:1
+   |
+60 | import numpy as np
+61 | import torch
+   | ^^^^^^^^^^^^
+62 |
+63 | import matplotlib
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:63:1
+   |
+61 | import torch
+62 |
+63 | import matplotlib
+   | ^^^^^^^^^^^^^^^^^
+64 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+65 | import matplotlib.pyplot as plt
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:65:1
+   |
+63 | import matplotlib
+64 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+65 | import matplotlib.pyplot as plt
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+66 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:66:1
+   |
+64 | matplotlib.use("Agg")  # headless: render straight to a pixel buffer
+65 | import matplotlib.pyplot as plt
+66 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+67 |
+68 | import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:68:1
+   |
+66 | from matplotlib.backends.backend_agg import FigureCanvasAgg
+67 |
+68 | import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+   | ^^^^^^^^^^
+69 | import networkx as nx
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:69:1
+   |
+68 | import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+69 | import networkx as nx
+   | ^^^^^^^^^^^^^^^^^^^^^
+70 |
+71 | from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:71:1
+   |
+69 | import networkx as nx
+70 |
+71 | from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+72 | from pythongpu.oscillators.lorenz import LorenzNetwork
+73 | from pythongpu.oscillators.rossler import RosslerNetwork
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:72:1
+   |
+71 | from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork
+72 | from pythongpu.oscillators.lorenz import LorenzNetwork
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+73 | from pythongpu.oscillators.rossler import RosslerNetwork
+74 | from pythongpu.oscillators.vanderpol import VanDerPolNetwork
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:73:1
+   |
+71 | from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork
+72 | from pythongpu.oscillators.lorenz import LorenzNetwork
+73 | from pythongpu.oscillators.rossler import RosslerNetwork
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+74 | from pythongpu.oscillators.vanderpol import VanDerPolNetwork
+75 | from pythongpu.processing.box_counting import (
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:74:1
+   |
+72 | from pythongpu.oscillators.lorenz import LorenzNetwork
+73 | from pythongpu.oscillators.rossler import RosslerNetwork
+74 | from pythongpu.oscillators.vanderpol import VanDerPolNetwork
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+75 | from pythongpu.processing.box_counting import (
+76 |     boxcount_2d_gpu,
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:75:1
+   |
+73 |   from pythongpu.oscillators.rossler import RosslerNetwork
+74 |   from pythongpu.oscillators.vanderpol import VanDerPolNetwork
+75 | / from pythongpu.processing.box_counting import (
+76 | |     boxcount_2d_gpu,
+77 | |     extract_boundary,
+78 | |     fractal_dimension,
+79 | | )
+   | |_^
+80 |   from pythongpu.utils import get_laplacian
+   |
+
+E402 Module level import not at top of file
+  --> pythongpu/pipeline/universality_sweep.py:80:1
+   |
+78 |     fractal_dimension,
+79 | )
+80 | from pythongpu.utils import get_laplacian
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+F401 [*] `numpy` imported but unused
+  --> pythongpu/visualization/plot_dti.py:9:17
+   |
+ 7 | matplotlib.use("Agg")
+ 8 | import matplotlib.pyplot as plt
+ 9 | import numpy as np
+   |                 ^^
+10 | from scipy.io import loadmat
+   |
+help: Remove unused import: `numpy`
+
+F541 [*] f-string without any placeholders
+  --> pythongpu/visualization/plot_kuramoto_basins.py:66:15
+   |
+64 |              fontsize=8, color='cyan')
+65 |
+66 | ax.set_xlabel(f"$x_0(0)$ — Node 0 initial phase", fontsize=12)
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+67 | ax.set_ylabel(f"$x_1(0)$ — Node 1 initial phase", fontsize=12)
+68 | ax.set_title('Kuramoto Basin Map — Continuous $R$\n'
+   |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+  --> pythongpu/visualization/plot_kuramoto_basins.py:67:15
+   |
+66 | ax.set_xlabel(f"$x_0(0)$ — Node 0 initial phase", fontsize=12)
+67 | ax.set_ylabel(f"$x_1(0)$ — Node 1 initial phase", fontsize=12)
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+68 | ax.set_title('Kuramoto Basin Map — Continuous $R$\n'
+69 |              f'N={cfg["n_nodes"]}, M={cfg["n_edges"]}, '
+   |
+help: Remove extraneous `f` prefix
+
+E702 Multiple statements on one line (semicolon)
+  --> pythongpu/visualization/plot_kuramoto_basins.py:76:21
+   |
+74 | ticks     = [-np.pi, -np.pi/2, 0, np.pi/2, np.pi]
+75 | ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
+76 | ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
+   |                     ^
+77 | ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+   |
+
+E702 Multiple statements on one line (semicolon)
+  --> pythongpu/visualization/plot_kuramoto_basins.py:77:21
+   |
+75 | ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
+76 | ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
+77 | ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+   |                     ^
+78 |
+79 | plt.tight_layout()
+   |
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/visualization/plot_kuramoto_basins.py:121:15
+    |
+119 |                label=f'Basin {k+1}')
+120 |
+121 | ax.set_xlabel(f"$x_{{0}}(0)$ — Node 0 initial phase", fontsize=12)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+122 | ax.set_ylabel(f"$x_{{1}}(0)$ — Node 1 initial phase", fontsize=12)
+123 | ax.set_title(f'Kuramoto Basin Map — $K={K_clus}$ Clusters\n'
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/visualization/plot_kuramoto_basins.py:122:15
+    |
+121 | ax.set_xlabel(f"$x_{{0}}(0)$ — Node 0 initial phase", fontsize=12)
+122 | ax.set_ylabel(f"$x_{{1}}(0)$ — Node 1 initial phase", fontsize=12)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+123 | ax.set_title(f'Kuramoto Basin Map — $K={K_clus}$ Clusters\n'
+124 |              f'N={cfg["n_nodes"]}, M={cfg["n_edges"]}, '
+    |
+help: Remove extraneous `f` prefix
+
+E702 Multiple statements on one line (semicolon)
+   --> pythongpu/visualization/plot_kuramoto_basins.py:128:21
+    |
+126 |              fontsize=11)
+127 |
+128 | ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
+    |                     ^
+129 | ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+130 | ax.set_xlim(Xg.min(), Xg.max())
+    |
+
+E702 Multiple statements on one line (semicolon)
+   --> pythongpu/visualization/plot_kuramoto_basins.py:129:21
+    |
+128 | ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
+129 | ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+    |                     ^
+130 | ax.set_xlim(Xg.min(), Xg.max())
+131 | ax.set_ylim(Yg.min(), Yg.max())             # [Page 37]: xlim/ylim from data
+    |
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/visualization/plot_kuramoto_basins.py:143:7
+    |
+141 | # ── 3. SUMMARY STATS ─────────────────────────────────────────
+142 | synced = (R >= cfg['sync_threshold']).mean()
+143 | print(f"\n── Basin Statistics ──────────────────────────")
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+144 | print(f"Grid resolution : {m}×{m} = {m*m} initial conditions")
+145 | print(f"R  mean         : {R.mean():.4f}")
+    |
+help: Remove extraneous `f` prefix
+
+F401 [*] `pathlib.Path` imported but unused
+  --> pythongpu/visualization/plot_lorenz_basins.py:21:21
+   |
+19 | import glob
+20 | import argparse
+21 | from pathlib import Path
+   |                     ^^^^
+22 | from datetime import datetime
+   |
+help: Remove unused import: `pathlib.Path`
+
+E402 Module level import not at top of file
+   --> pythongpu/visualization/plot_lorenz_basins.py:149:1
+    |
+147 | # shows exactly k swatches instead of the continuous tab20 ramp (which drew ~20
+148 | # interpolated bands and read as far more basins than exist).
+149 | from matplotlib.colors import BoundaryNorm, ListedColormap
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+150 | uniq = np.unique(labels)
+151 | k_present = len(uniq)
+    |
+
+F541 [*] f-string without any placeholders
+   --> pythongpu/visualization/plot_lorenz_basins.py:223:7
+    |
+222 | # -- 5. SUMMARY STATS -------------------------------------------
+223 | print(f"\n-- Basin Statistics ------------------------------")
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+224 | print(f"Grid resolution  : {m}x{m} = {B} initial conditions")
+225 | print(f"Number of nodes  : {N_osc}")
+    |
+help: Remove extraneous `f` prefix
+
+Found 86 errors.
+[*] 46 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).

@@ -44,7 +44,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from scipy.io import loadmat
 from tqdm import tqdm
 
 from pythongpu.utils import get_plot_path
@@ -283,7 +282,7 @@ def main():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(f"[time]     {timestamp}")
-    print(f"[variant]  Z-coupled  (f[...,2] -= gel * L @ Z)")
+    print("[variant]  Z-coupled  (f[...,2] -= gel * L @ Z)")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[device]   {device}")
@@ -380,9 +379,9 @@ def main():
     D_f, r_sq = fractal_dimension(r, n)
     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
     print(
-        f"           D_f ≈ 1.0 → smooth  |  "
-        f"D_f ≈ 2.0 → space-filling  |  "
-        f"chimera range: ~1.2–1.8"
+        "           D_f ≈ 1.0 → smooth  |  "
+        "D_f ≈ 2.0 → space-filling  |  "
+        "chimera range: ~1.2–1.8"
     )
 
     fig_bd, ax_bd = plt.subplots(figsize=(7, 6))

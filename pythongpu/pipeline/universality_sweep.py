@@ -57,27 +57,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import numpy as np
-import torch
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
 
-import matplotlib
+import matplotlib  # noqa: E402
 matplotlib.use("Agg")  # headless: render straight to a pixel buffer
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.backends.backend_agg import FigureCanvasAgg  # noqa: E402
 
-import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
-import networkx as nx
+import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)  # noqa: E402
+import networkx as nx  # noqa: E402
 
-from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork
-from pythongpu.oscillators.lorenz import LorenzNetwork
-from pythongpu.oscillators.rossler import RosslerNetwork
-from pythongpu.oscillators.vanderpol import VanDerPolNetwork
-from pythongpu.processing.box_counting import (
+from pythongpu.oscillators.hindmarsh_rose import HindmarshRoseNetwork  # noqa: E402
+from pythongpu.oscillators.lorenz import LorenzNetwork  # noqa: E402
+from pythongpu.oscillators.rossler import RosslerNetwork  # noqa: E402
+from pythongpu.oscillators.vanderpol import VanDerPolNetwork  # noqa: E402
+from pythongpu.processing.box_counting import (  # noqa: E402
     boxcount_2d_gpu,
     extract_boundary,
     fractal_dimension,
 )
-from pythongpu.utils import get_laplacian
+from pythongpu.utils import get_laplacian  # noqa: E402
 
 
 # ── 1. SYSTEM REGISTRY ───────────────────────────────────────

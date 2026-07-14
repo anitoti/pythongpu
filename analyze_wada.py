@@ -229,9 +229,11 @@ def _draw_basin_panel(ax, rec):
                  f"{rec['n_basins']} basins · "
                  f"Wada coverage = {rec['wada_fraction']*100:.1f}%")
     if rec["extent"] is not None:
-        ax.set_xlabel("$x_0$"); ax.set_ylabel("$y_0$")
+        ax.set_xlabel("$x_0$")
+        ax.set_ylabel("$y_0$")
     else:
-        ax.set_xlabel("grid column"); ax.set_ylabel("grid row")
+        ax.set_xlabel("grid column")
+        ax.set_ylabel("grid row")
     ax.plot([], [], "s", color="#d62728", label="Wada boundary")
     ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
 
@@ -261,7 +263,8 @@ def render_pair_figure(rec, Ks, fracs, Dfs, out_dir: Path, dpi: int):
     _draw_sweep_panel(axes[1], Ks, fracs, Dfs, mark_K=rec["K"])
     fig.tight_layout()
     out = out_dir / f"{rec['stem']}_wada.png"
-    fig.savefig(out); plt.close(fig)
+    fig.savefig(out)
+    plt.close(fig)
     return out
 
 
@@ -281,7 +284,8 @@ def render_sweep_figure(Ks, fracs, strict, Dfs, out_dir: Path, dpi: int):
     ax.set_title("Daza Wada-boundary coverage vs. coupling")
     fig.tight_layout()
     out = out_dir / "wada_coverage_vs_K.png"
-    fig.savefig(out); plt.close(fig)
+    fig.savefig(out)
+    plt.close(fig)
     return out
 
 

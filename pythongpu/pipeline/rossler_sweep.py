@@ -59,7 +59,6 @@ from pathlib import Path
 # ── third-party ─────────────────────────────────────────────────────────────
 import numpy as np
 import torch
-from scipy.io import loadmat
 from tqdm import tqdm
 
 from pythongpu.utils import get_plot_path
@@ -404,7 +403,7 @@ def main():
     # ── device ──────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[device]   {device}")
-    print(f"[variant]  Rössler X-coupled  (canonical chaotic a=0.2 b=0.2 c=5.7)")
+    print("[variant]  Rössler X-coupled  (canonical chaotic a=0.2 b=0.2 c=5.7)")
 
     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
     L_gpu, n_dti = load_dti_laplacian(args.dti_path, device)
@@ -521,7 +520,7 @@ def main():
     plt.tight_layout()
     plt.savefig(get_plot_path("rossler_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
     plt.close(fig_bm)
-    print(f"[saved]    basin_map_kmeans.png")
+    print("[saved]    basin_map_kmeans.png")
 
     # ── Basin boundary + box-counting ────────────────────────────────────
     boundary  = extract_boundary(labels)
@@ -529,9 +528,9 @@ def main():
     D_f, r_sq = fractal_dimension(r, n)
     print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
     print(
-        f"           D_f ≈ 1.0 → smooth curve\n"
-        f"           D_f ≈ 2.0 → space-filling\n"
-        f"           Expected chimera range: ~1.2–1.8"
+        "           D_f ≈ 1.0 → smooth curve\n"
+        "           D_f ≈ 2.0 → space-filling\n"
+        "           Expected chimera range: ~1.2–1.8"
     )
 
     fig_bd, ax_bd = plt.subplots(figsize=(7, 6))

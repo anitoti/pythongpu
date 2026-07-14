@@ -1,6 +1,4 @@
 import networkx as nx
-import torch
-import numpy as np
 from pythongpu.utils import get_laplacian, get_plot_path
 import matplotlib # this and Agg dont open a new window in the server, so just a file saves
 matplotlib.use('Agg')

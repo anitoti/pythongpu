@@ -9,7 +9,8 @@
 
 # CUDA_VISIBLE_DEVICES=0 /usr/bin/python3 /home/atotilca/pythongpu/kuramoto_basins.py
 
-import os, math
+import os
+import math
 import numpy as np
 import torch
 import networkx as nx
@@ -224,7 +225,6 @@ def run_sweep(cfg: Config):
     np.save(cfg.out_path, {
         "X"        : X,                                    # (m, m) grid coords
         "Y"        : Y,                                    # (m, m) grid coords
-        "theta"    : theta.cpu().numpy(),
         "theta"    : theta.cpu().numpy(),
         "R"        : R.reshape(cfg.sweep_points,
                                cfg.sweep_points),          # (m, m) order param

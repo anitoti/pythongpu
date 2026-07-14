@@ -39,24 +39,23 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import numpy as np
-import torch
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
 
-import matplotlib
+import matplotlib  # noqa: E402
 matplotlib.use("Agg")  # headless: render straight to a pixel buffer
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.backends.backend_agg import FigureCanvasAgg  # noqa: E402
 
-import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)
+import cv2  # MP4 muxing without a system ffmpeg (bundled mp4v encoder)  # noqa: E402
 
-from pythongpu.pipeline.kuramoto_sweep import (
-    kuramoto_rhs,
+from pythongpu.pipeline.kuramoto_sweep import (  # noqa: E402
     rk4_step,
     order_parameter,
     build_ic_grid,
     Config as SweepConfig,
 )
-from pythongpu.processing.box_counting import (
+from pythongpu.processing.box_counting import (  # noqa: E402
     extract_boundary,
     boxcount_2d_gpu,
     fractal_dimension,
