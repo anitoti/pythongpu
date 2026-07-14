@@ -54,6 +54,21 @@ from scipy.interpolate import CubicSpline
 _TASK_RE = re.compile(r"task_(\d+)_K([-+]?\d*\.?\d+)")
 
 
+def _find_npz(task_dir: str):
+    """Locate basin_data.npz within a task dir.
+
+    lorenz_sweep currently writes it to the task root, but the plot PNGs go to
+    <task>/derivatives/, so check derivatives/ first (in case the .npz is ever
+    moved alongside them), then the root, then a recursive glob as a backstop.
+    """
+    for cand in (os.path.join(task_dir, "derivatives", "basin_data.npz"),
+                 os.path.join(task_dir, "basin_data.npz")):
+        if os.path.isfile(cand):
+            return cand
+    hits = glob.glob(os.path.join(task_dir, "**", "basin_data.npz"), recursive=True)
+    return hits[0] if hits else None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  1. Harvest (K, D_f) from every task directory
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,8 +81,8 @@ def harvest(root: str):
     rows, skipped = [], []
     for d in task_dirs:
         m = _TASK_RE.search(os.path.basename(d))
-        npz = os.path.join(d, "basin_data.npz")
-        if m is None or not os.path.isfile(npz):
+        npz = _find_npz(d)
+        if m is None or npz is None:
             skipped.append(d)
             continue
         k = float(m.group(2))

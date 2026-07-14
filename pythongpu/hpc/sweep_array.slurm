@@ -116,10 +116,13 @@ FRAME_GALLERY="${RESULTS_ROOT}/frames"
 mkdir -p "$FRAME_GALLERY"
 
 # lorenz_sweep writes plots into <outdir>/derivatives/ with a module-name
-# prefix (e.g. lorenz_vps_clustering__basin_map_kmeans.png), so resolve the
-# basin map by glob rather than assuming a bare name at the task-dir root.
-BASIN_PNG=$(ls "${TASK_OUTDIR}"/derivatives/*basin_map_kmeans.png 2>/dev/null | head -1)
-if [ -n "$BASIN_PNG" ]; then
+# prefix. Point at the explicit expected filename first, then fall back to a
+# glob (in case the module prefix ever changes) so frame collection is robust.
+BASIN_PNG="${TASK_OUTDIR}/derivatives/lorenz_vps_clustering__basin_map_kmeans.png"
+if [ ! -f "$BASIN_PNG" ]; then
+    BASIN_PNG=$(ls "${TASK_OUTDIR}"/derivatives/*basin_map_kmeans.png 2>/dev/null | head -1)
+fi
+if [ -n "$BASIN_PNG" ] && [ -f "$BASIN_PNG" ]; then
     cp "$BASIN_PNG" "${FRAME_GALLERY}/frame_${FRAME_IDX}.png"
     echo "Array element ${TASK_ID} complete: K=${COUPLING} -> frame_${FRAME_IDX}.png"
 else
