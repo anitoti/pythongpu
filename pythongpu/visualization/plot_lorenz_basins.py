@@ -143,17 +143,28 @@ if not config_present:
 # -- 1. BASIN MAP (K-MEANS) ------------------------------------
 print("\nPlotting basin map ...")
 fig_bm, ax_bm = plt.subplots(figsize=(7, 6))
+# Discrete colormap: one colour per basin actually present, so the colorbar
+# shows exactly k swatches instead of the continuous tab20 ramp (which drew ~20
+# interpolated bands and read as far more basins than exist).
+from matplotlib.colors import BoundaryNorm, ListedColormap
+uniq = np.unique(labels)
+k_present = len(uniq)
+cmap_bm = ListedColormap(plt.cm.tab20.colors[:k_present])
+norm_bm = BoundaryNorm(np.arange(-0.5, k_present + 0.5), k_present)
+# Map possibly non-contiguous label ids onto 0..k-1 for the discrete norm.
+labels_contig = np.searchsorted(uniq, labels)
 im = ax_bm.imshow(
-    labels, origin="lower", cmap="tab20",
+    labels_contig, origin="lower", cmap=cmap_bm, norm=norm_bm,
     extent=extent, interpolation="nearest",
 )
 ax_bm.set_xlabel(axis_x)
 ax_bm.set_ylabel(axis_y)
 ax_bm.set_title(
-    f"K-Means Basin Map (k={len(np.unique(labels))})\n"
+    f"K-Means Basin Map (k={k_present})\n"
     f"N={N_osc}  {coupling_str}  grid={m}²"
 )
-plt.colorbar(im, ax=ax_bm, label="Basin label")
+cbar_bm = plt.colorbar(im, ax=ax_bm, ticks=range(k_present), label="Basin label")
+cbar_bm.ax.set_yticklabels([str(int(u)) for u in uniq])
 plt.tight_layout()
 bm_path = get_plot_path("plot_lorenz_basins", f"basin_map_kmeans_{ts}.png", SAVE_DIR)
 plt.savefig(bm_path, dpi=150)
