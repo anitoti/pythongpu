@@ -39,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
@@ -142,59 +143,77 @@ def plot_curve(K, Df, R2, out_png: str, csv_path: str | None = None):
 # ─────────────────────────────────────────────────────────────────────────────
 #  3. Compile the frame gallery into an mp4
 # ─────────────────────────────────────────────────────────────────────────────
-def compile_video(frames_dir: str, out_mp4: str, fps: int, bitrate: str):
+def compile_video(frames_dir: str, out_mp4: str, fps: int, bitrate: str,
+                  hold: int = 1, duration: float | None = None):
     frames = sorted(glob.glob(os.path.join(frames_dir, "frame_*.png")))
     if not frames:
         print(f"[warn] no frames in {frames_dir}; skipping video")
         return
-    dur = len(frames) / fps
-    print(f"[video]    {len(frames)} frames @ {fps} fps  ->  {dur:.2f} s")
+
+    # --duration overrides --hold: solve for the per-frame repeat count that
+    # makes the whole clip last ~duration seconds at the chosen fps.
+    if duration is not None:
+        hold = max(1, round(duration * fps / len(frames)))
+    hold = max(1, int(hold))
+
+    # Materialise the playback order by repeating each K-frame `hold` times.
+    seq = [f for f in frames for _ in range(hold)]
+    dur = len(seq) / fps
+    print(f"[video]    {len(frames)} frames x hold {hold} = {len(seq)} @ "
+          f"{fps} fps  ->  {dur:.2f} s")
     if dur < 2:
-        print(f"[hint]     that is a very short clip; consider --fps 8–12 for "
-              f"a slower, more watchable sweep, or generate more K values.")
+        print(f"[hint]     still a short clip; raise --hold or set "
+              f"--duration 10 for a smooth ~10 s sweep.")
 
     if shutil.which("ffmpeg"):
-        _ffmpeg(frames_dir, out_mp4, fps, bitrate)
+        _ffmpeg(seq, out_mp4, fps, bitrate)
     else:
         print("[warn] ffmpeg not on PATH "
               "(on ACRES: module load FFmpeg/4.4.2-GCCcore-11.3.0); "
               "using OpenCV mp4v fallback.")
-        _opencv(frames, out_mp4, fps)
+        _opencv(seq, out_mp4, fps)
 
 
-def _ffmpeg(frames_dir: str, out_mp4: str, fps: int, bitrate: str):
-    # `-start_number 0` + %04d matches frame_0000.png, frame_0001.png, ...
-    # pad filter forces even dimensions (required by yuv420p / most players).
-    cmd = [
-        "ffmpeg", "-y",
-        "-framerate", str(fps),
-        "-start_number", "0",
-        "-i", os.path.join(frames_dir, "frame_%04d.png"),
-        "-c:v", "libx264",
-        "-preset", "slow",
-        "-b:v", bitrate,
-        "-pix_fmt", "yuv420p",
-        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-        out_mp4,
-    ]
-    print("[ffmpeg]   " + " ".join(cmd))
+def _ffmpeg(seq, out_mp4: str, fps: int, bitrate: str):
+    # ffmpeg's %0Nd reader needs a contiguous numbered sequence, so stage the
+    # (possibly repeated) playback order as symlinks in a temp dir. Symlinks
+    # keep it cheap — no copying of the PNGs, even for long holds.
+    tmp = tempfile.mkdtemp(prefix="framestage_")
     try:
+        for j, src in enumerate(seq):
+            os.symlink(os.path.abspath(src), os.path.join(tmp, f"f_{j:06d}.png"))
+        # pad filter forces even dimensions (required by yuv420p / most players).
+        cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-start_number", "0",
+            "-i", os.path.join(tmp, "f_%06d.png"),
+            "-c:v", "libx264",
+            "-preset", "slow",
+            "-b:v", bitrate,
+            "-pix_fmt", "yuv420p",
+            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+            out_mp4,
+        ]
+        print("[ffmpeg]   " + " ".join(cmd[:1]) + " ... -> " + out_mp4)
         subprocess.run(cmd, check=True)
         print(f"[saved]    {out_mp4}")
     except subprocess.CalledProcessError as exc:
         sys.exit(f"[error] ffmpeg failed (exit {exc.returncode})")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _opencv(frames, out_mp4: str, fps: int):
+def _opencv(seq, out_mp4: str, fps: int):
     try:
         import cv2
     except ImportError:
         sys.exit("[error] neither ffmpeg nor OpenCV available; cannot make video")
-    first = cv2.imread(frames[0])
+    first = cv2.imread(seq[0])
     h, w = first.shape[:2]
     writer = cv2.VideoWriter(out_mp4, cv2.VideoWriter_fourcc(*"mp4v"),
                              fps, (w, h))
-    for f in frames:
+    for f in seq:
         img = cv2.imread(f)
         if img.shape[:2] != (h, w):
             img = cv2.resize(img, (w, h))
@@ -218,6 +237,12 @@ def main():
     ap.add_argument("--fps", type=int, default=60, help="video frame rate")
     ap.add_argument("--bitrate", default="20M",
                     help="ffmpeg target video bitrate (default: 20M)")
+    ap.add_argument("--hold", type=int, default=1,
+                    help="repeat each K-frame this many times so it lingers "
+                         "(default: 1)")
+    ap.add_argument("--duration", type=float, default=None,
+                    help="target clip length in seconds; overrides --hold by "
+                         "auto-computing the per-frame repeat (e.g. --duration 10)")
     ap.add_argument("--no-video", action="store_true",
                     help="only build the D_f curve, skip the mp4")
     args = ap.parse_args()
@@ -234,7 +259,8 @@ def main():
     plot_curve(K, Df, R2, curve_out, csv_out)
 
     if not args.no_video:
-        compile_video(os.path.join(root, "frames"), video_out, args.fps, args.bitrate)
+        compile_video(os.path.join(root, "frames"), video_out, args.fps,
+                      args.bitrate, hold=args.hold, duration=args.duration)
 
 
 if __name__ == "__main__":
