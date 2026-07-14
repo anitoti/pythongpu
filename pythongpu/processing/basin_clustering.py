@@ -50,6 +50,9 @@ class ClusterSelection:
     k_bic: int                        # BIC-criterion optimum
     k_silhouette: int                 # silhouette-criterion optimum
     criterion: str                    # criterion used to set best_k
+    structured: bool = True           # False → features carry no separable
+                                      # structure (null guard); best_k forced 1
+    null_p95: float = float("nan")    # 95th pct of shuffle-null best silhouette
     meta: dict = field(default_factory=dict)
 
 
@@ -78,6 +81,8 @@ def select_optimal_clusters(
     pca_dim: int = 10,
     silhouette_sample: int = 4096,
     random_state: int = 42,
+    null_reps: int = 0,
+    min_silhouette: float = 0.10,
 ) -> ClusterSelection:
     """
     Estimate the optimal number of basins for the feature matrix ``X``
@@ -95,6 +100,17 @@ def select_optimal_clusters(
         grid resolution / node count).
     silhouette_sample : cap on the number of points fed to the O(n^2)
         silhouette computation; a fixed-seed subsample is used above this size.
+    null_reps : if > 0, run a structure-vs-noise guard. The best silhouette
+        achievable on the real (PCA-reduced) features is compared against a null
+        built by independently shuffling each feature column (destroys joint
+        cluster structure, preserves every marginal). If the real optimum does
+        not clear the null 95th percentile AND exceed ``min_silhouette``, the
+        features carry no separable structure: ``structured`` is set False and
+        ``best_k`` is forced to 1 (a single basin). This stops the elbow/BIC
+        consensus from fabricating basins out of a near-degenerate blob (e.g. a
+        near-synchronized regime). Default 0 keeps the legacy behaviour exactly.
+    min_silhouette : floor the real optimum must also exceed to count as
+        structured, guarding against a null band that sits near zero.
     """
     X = np.asarray(X, dtype=np.float64)
     if X.ndim == 1:
@@ -144,6 +160,43 @@ def select_optimal_clusters(
     k_bic = int(k_values[int(np.argmin(bic))])
     k_silhouette = int(k_values[int(np.argmax(silhouette))])
 
+    # ── structure-vs-noise guard ────────────────────────────────────────────
+    # Refuse to fabricate basins when the features are a single near-degenerate
+    # blob: the real best silhouette must clear a column-shuffle null band and a
+    # floor. Both real and null optima are measured on the same subsample for a
+    # fair, cheap comparison.
+    structured, null_p95 = True, float("nan")
+    if null_reps > 0:
+        A = Xs[sil_idx]
+
+        def _best_sil(mat: np.ndarray) -> float:
+            best = -1.0
+            for k in k_values:
+                lab_k = KMeans(n_clusters=int(k), n_init=5,
+                               random_state=random_state).fit_predict(mat)
+                if np.unique(lab_k).size > 1:
+                    best = max(best, float(silhouette_score(mat, lab_k)))
+            return best
+
+        real_best = _best_sil(A)
+        null_best = np.empty(null_reps)
+        for rep in range(null_reps):
+            Z = A.copy()
+            for j in range(Z.shape[1]):
+                Z[:, j] = Z[rng.permutation(A.shape[0]), j]
+            null_best[rep] = _best_sil(Z)
+        null_p95 = float(np.percentile(null_best, 95))
+        structured = (real_best > null_p95) and (real_best >= min_silhouette)
+
+    if not structured:
+        return ClusterSelection(
+            best_k=1, labels=np.zeros(n_samples, dtype=int), k_values=k_values,
+            inertia=inertia, bic=bic, silhouette=silhouette,
+            k_elbow=k_elbow, k_bic=k_bic, k_silhouette=k_silhouette,
+            criterion=criterion, structured=False, null_p95=null_p95,
+            meta={"n_samples": n_samples, "pca_dim": int(min(pca_dim, X.shape[1])),
+                  "reason": "null-guard: no separable structure"})
+
     if criterion == "elbow":
         best_k = k_elbow
     elif criterion == "bic":
@@ -160,7 +213,7 @@ def select_optimal_clusters(
         best_k=best_k, labels=labels_by_k[best_k], k_values=k_values,
         inertia=inertia, bic=bic, silhouette=silhouette,
         k_elbow=k_elbow, k_bic=k_bic, k_silhouette=k_silhouette,
-        criterion=criterion,
+        criterion=criterion, structured=True, null_p95=null_p95,
         meta={"n_samples": n_samples, "pca_dim": int(min(pca_dim, X.shape[1]))},
     )
 
