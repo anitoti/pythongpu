@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-rossler_vps_clustering.py
--------------------------
+hr_vps_clustering.py
+--------------------
 Author : anitoti
 Date   : summer 2026
 Project: Nimble Brain — Clarkson University REU (Dr. Jeremie Fish)
 
-Rössler variant of the DTI-coupled VPS basin-mapping pipeline. Strict
-feature parity with lorenz_sweep.py — identical pipeline stages, CLI,
-output artefacts and file names — with the Lorenz-63 vector field swapped
-for the canonical chaotic Rössler flow.
+Hindmarsh–Rose variant of the DTI-coupled VPS basin-mapping pipeline.
+Strict feature parity with lorenz_sweep.py — identical pipeline stages,
+CLI, output artefacts and file names — with the Lorenz-63 vector field
+swapped for the canonical chaotic-bursting Hindmarsh–Rose neuron.
 
 Pipeline (mirrors lorenz_sweep.py exactly):
   1. Load DTI_A.mat structural connectivity, build the graph Laplacian.
@@ -22,22 +22,23 @@ Pipeline (mirrors lorenz_sweep.py exactly):
   7. Recursive boxdiv2 fractal boundary synthesis.
   8. Edge-rewiring perturbation demo on the DTI adjacency.
 
-Physics — canonical chaotic Rössler (a=0.2, b=0.2, c=5.7):
-    dX_i = -Y_i - Z_i - gel*(L@X)_i
-    dY_i =  X_i + a*Y_i
-    dZ_i =  b + Z_i*(X_i - c)
+Physics — chaotic-bursting Hindmarsh–Rose
+(a=1, b=3, c=1, d=5, s=4, r=0.006, x_rest=-1.6, I=3.2):
+    dX_i = Y_i - a*X_i**3 + b*X_i**2 - Z_i + I - gel*(L@X)_i
+    dY_i = c - d*X_i**2 - Y_i
+    dZ_i = r*( s*(X_i - x_rest) - Z_i )
 
-Coupling acts on the X component only — the oscillatory component of the
-Rössler flow (Z is a slow spiking variable and is a poor synchronisation
-channel), matching the H = diag[1,0,0] projection every oscillator in this
-package uses.
+X is the fast membrane potential, Y the fast recovery current, Z the slow
+adaptation variable (small time-constant r separates the time scales).
+Coupling acts through the fast X component only — the H = diag[1,0,0]
+projection shared by every oscillator in this package.
 
 Run:
-    python3 -m pythongpu.pipeline.rossler_sweep
-    python3 -m pythongpu.pipeline.rossler_sweep \
+    python3 -m pythongpu.pipeline.hr_sweep
+    python3 -m pythongpu.pipeline.hr_sweep \
         --grid-n 64 --coupling 0.5 \
         --dti-path data/DTI_A.mat \
-        --outdir /home/atotilca/pythongpu/data/rossler/
+        --outdir /home/atotilca/pythongpu/data/hr/
 """
 
 # ── from __future__ MUST be the absolute first statement in the file ────────
@@ -77,35 +78,37 @@ from pythongpu.processing.basin_clustering import select_optimal_clusters, plot_
 # 2.  PARAMETERS
 # ═══════════════════════════════════════════════════════════════════════════
 @dataclass
-class RosslerParams:
+class HindmarshRoseParams:
     """
-    Canonical chaotic Rössler parameters (a=0.2, b=0.2, c=5.7).
+    Canonical chaotic-bursting Hindmarsh–Rose parameters
+    (a=1, b=3, c=1, d=5, s=4, r=0.006, x_rest=-1.6, I=3.2).
 
     n_osc is set from the DTI matrix shape in main() — do not set by hand.
     steps_transient and steps_record are derived from float times in
     __post_init__ so they stay consistent if dt is changed.
 
-    grid_lo / grid_hi bound the 2-D IC slice. Perturbations are kept within
-    the Rössler x-attractor (roughly x ∈ [-9, 11]) at [-9, 9] — the same
-    slice as Lorenz — so no initial condition starts off-basin and escapes.
+    grid_lo / grid_hi bound the 2-D IC slice. The HR fast membrane
+    potential X lives roughly in [-1.6, 2.0] for this regime, so the slice
+    perturbs X over [-2, 2] (Lorenz used [-9, 9]).
 
-    dt is smaller than the Lorenz variant (0.05): the DTI-coupled Rössler is
-    stiff (eig_max(L) ≈ 45) and the attractor is not globally attracting, so
-    dt=0.05 diverges to Z→∞; dt=0.01 stays bounded for coupling ∈ [0, 1].
+    The slow adaptation variable Z (time-constant r=0.006) organises the
+    bursting foliation, so a longer transient/record window than Lorenz is
+    used to average over several slow bursts.
     """
-    a               : float = 0.2       # canonical chaotic Rössler
-    b               : float = 0.2
-    c               : float = 5.7
-    coupling        : float = 0.05      # gel — Laplacian coupling on X. The
-                                        # X-coupled Rössler destabilises above
-                                        # ~0.15 (Z→∞), so its useful basin-
-                                        # structure window is small (≲0.1),
-                                        # unlike the globally-bounded Lorenz/HR.
-    dt              : float = 0.01      # small step for stiff coupled Rössler
-    t_transient     : float = 100.0     # burn-in seconds — discarded
-    tmax            : float = 200.0     # record window (s) — ~33 Rössler cycles
-    grid_lo         : float = -9.0      # IC slice lower bound (within attractor)
-    grid_hi         : float = 9.0       # IC slice upper bound (within attractor)
+    a               : float = 1.0       # chaotic-bursting Hindmarsh–Rose
+    b               : float = 3.0
+    c               : float = 1.0
+    d               : float = 5.0
+    s               : float = 4.0
+    r               : float = 0.006     # slow adaptation time-constant
+    x_rest          : float = -1.6      # x1 resting membrane potential
+    I               : float = 3.2       # external drive — chaotic window
+    coupling        : float = 0.5       # gel — Laplacian coupling on X
+    dt              : float = 0.05
+    t_transient     : float = 200.0     # burn-in seconds — discarded
+    tmax            : float = 1000.0    # record window (s) — several bursts
+    grid_lo         : float = -2.0      # IC slice lower bound (membrane V)
+    grid_hi         : float = 2.0       # IC slice upper bound (membrane V)
     slice_node_x    : int   = 28        # node varied along grid x-axis
     slice_node_y    : int   = 79        # node varied along grid y-axis
     n_osc           : int   = 0         # filled from DTI matrix in main()
@@ -118,21 +121,21 @@ class RosslerParams:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 3.  PHYSICS — batched coupled Rössler RHS with DTI Laplacian
+# 3.  PHYSICS — batched coupled Hindmarsh–Rose RHS with DTI Laplacian
 # ═══════════════════════════════════════════════════════════════════════════
-def rossler_rhs_batched(
+def hr_rhs_batched(
     x     : torch.Tensor,
     L_gpu : torch.Tensor,
-    p     : RosslerParams,
+    p     : HindmarshRoseParams,
 ) -> torch.Tensor:
     """
-    Batched RHS of the DTI-coupled Rössler network.
+    Batched RHS of the DTI-coupled Hindmarsh–Rose network.
 
     Args
     ----
     x     : (B, N, 3)  — state; B=batch(ICs), N=nodes, 3=[X,Y,Z]
     L_gpu : (N, N)     — graph Laplacian on GPU
-    p     : RosslerParams
+    p     : HindmarshRoseParams
 
     Returns
     -------
@@ -140,16 +143,15 @@ def rossler_rhs_batched(
 
     Physics
     -------
-    Intrinsic Rössler:
-        dX = -Y - Z
-        dY =  X + a*Y
-        dZ =  b + Z*(X - c)
+    Intrinsic Hindmarsh–Rose slow–fast dynamics:
+        dX = Y - a*X**3 + b*X**2 - Z + I
+        dY = c - d*X**2 - Y
+        dZ = r*( s*(X - x_rest) - Z )
 
-    DTI Laplacian coupling on X only:
+    DTI Laplacian coupling on the fast X component only:
         dX_i -= gel * (L @ X)_i
-    which is the H = diag[1,0,0] projection shared by every oscillator in
-    this package. The X component is the oscillatory channel of the Rössler
-    flow; Z is a slow spiking variable and is a poor synchronisation route.
+    the H = diag[1,0,0] projection shared by every oscillator in this
+    package.
 
     Vectorisation:
         x[..., 0] @ L_gpu.T  is (B,N) @ (N,N) = (B,N).
@@ -157,23 +159,27 @@ def rossler_rhs_batched(
         L_gpu.T == L_gpu for symmetric (undirected) DTI graphs;
         written as .T for correctness in the directed case.
     """
-    dX = -x[..., 1] - x[..., 2]                        # (B, N)
-    dY =  x[..., 0] + p.a * x[..., 1]                  # (B, N)
-    dZ =  p.b + x[..., 2] * (x[..., 0] - p.c)          # (B, N)
+    X = x[..., 0]   # (B, N)
+    Y = x[..., 1]   # (B, N)
+    Z = x[..., 2]   # (B, N)
 
-    f = torch.stack([dX, dY, dZ], dim=-1)               # (B, N, 3)
+    dX = Y - p.a * X.pow(3) + p.b * X.pow(2) - Z + p.I    # (B, N)
+    dY = p.c - p.d * X.pow(2) - Y                          # (B, N)
+    dZ = p.r * (p.s * (X - p.x_rest) - Z)                  # (B, N)
+
+    f = torch.stack([dX, dY, dZ], dim=-1)                  # (B, N, 3)
 
     # (B, N) @ (N, N) — one kernel, all ICs and nodes simultaneously
-    f[..., 0] -= p.coupling * (x[..., 0] @ L_gpu.T)
+    f[..., 0] -= p.coupling * (X @ L_gpu.T)
 
-    return f                                            # (B, N, 3)
+    return f                                               # (B, N, 3)
 
 
 @torch.no_grad()
 def rk4_step_batched(
     x     : torch.Tensor,
     L_gpu : torch.Tensor,
-    p     : RosslerParams,
+    p     : HindmarshRoseParams,
 ) -> torch.Tensor:
     """
     Single RK4 step over the full IC batch.
@@ -185,10 +191,10 @@ def rk4_step_batched(
 
     @torch.no_grad() disables autograd — saves ~30-40% memory.
     """
-    k1 = rossler_rhs_batched(x,                    L_gpu, p)
-    k2 = rossler_rhs_batched(x + 0.5 * p.dt * k1, L_gpu, p)
-    k3 = rossler_rhs_batched(x + 0.5 * p.dt * k2, L_gpu, p)
-    k4 = rossler_rhs_batched(x +       p.dt * k3,  L_gpu, p)
+    k1 = hr_rhs_batched(x,                    L_gpu, p)
+    k2 = hr_rhs_batched(x + 0.5 * p.dt * k1, L_gpu, p)
+    k3 = hr_rhs_batched(x + 0.5 * p.dt * k2, L_gpu, p)
+    k4 = hr_rhs_batched(x +       p.dt * k3,  L_gpu, p)
     return x + (p.dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
 
 
@@ -199,7 +205,7 @@ def rk4_step_batched(
 def run_sweep_streaming(
     x0     : torch.Tensor,
     L_gpu  : torch.Tensor,
-    p      : RosslerParams,
+    p      : HindmarshRoseParams,
     device : torch.device,
 ) -> torch.Tensor:
     """
@@ -209,8 +215,8 @@ def run_sweep_streaming(
     Memory cost: O(B * C(N,2)) instead of O(T * B * N * 3).
 
     VPS features per pair (i, j), i < j:
-        tau_x = mean|dX| / std|dX|    phase-coherence proxy (X is the
-                                      oscillatory Rössler component)
+        tau_x = mean|dX| / std|dX|    phase-coherence proxy (X is the fast
+                                      membrane potential)
         L     = mean Euclidean distance in (X,Y,Z)
 
     tau_x and mean_L live on different scales, so each block is
@@ -377,13 +383,12 @@ def main():
 
     # ── CLI ─────────────────────────────────────────────────────────────
     ap = argparse.ArgumentParser(
-        description="DTI-coupled Rössler basin map + fractal dimension"
+        description="DTI-coupled Hindmarsh–Rose basin map + fractal dimension"
     )
     ap.add_argument("--grid-n",     type=int,   default=128,
         help="Points per axis. 64→4096 ICs.")
-    ap.add_argument("--coupling",   type=float, default=0.05,
-        help="gel — Laplacian coupling strength on the X component. "
-             "Rössler destabilises above ~0.15; keep in its ≲0.1 window.")
+    ap.add_argument("--coupling",   type=float, default=0.5,
+        help="gel — Laplacian coupling strength on the fast X component.")
     ap.add_argument("--k-clusters", default="auto",
         help="Number of basins K. 'auto' (default) selects K dynamically from "
              "the VPS feature geometry via the Elbow+BIC+Silhouette consensus; "
@@ -404,22 +409,24 @@ def main():
     # ── device ──────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[device]   {device}")
-    print(f"[variant]  Rössler X-coupled  (canonical chaotic a=0.2 b=0.2 c=5.7)")
+    print(f"[variant]  Hindmarsh–Rose X-coupled  "
+          f"(chaotic-bursting a=1 b=3 c=1 d=5 s=4 r=0.006 I=3.2)")
 
     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
     L_gpu, n_dti = load_dti_laplacian(args.dti_path, device)
 
     # ── params — n_osc set from actual matrix size ───────────────────────
-    p = RosslerParams(
+    p = HindmarshRoseParams(
         coupling = args.coupling,
         n_osc    = n_dti,
     )
     print(
         f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI_A.mat)  "
         f"coupling={p.coupling}  dt={p.dt}\n"
-        f"           a={p.a}  b={p.b}  c={p.c}  "
-        f"grid=[{p.grid_lo}, {p.grid_hi}]\n"
-        f"           transient={p.t_transient}s ({p.steps_transient} steps)  "
+        f"           a={p.a}  b={p.b}  c={p.c}  d={p.d}  s={p.s}  "
+        f"r={p.r}  x_rest={p.x_rest}  I={p.I}\n"
+        f"           grid=[{p.grid_lo}, {p.grid_hi}]  "
+        f"transient={p.t_transient}s ({p.steps_transient} steps)  "
         f"record={p.tmax}s ({p.steps_record} steps)\n"
         f"           slice: node_x={p.slice_node_x}  node_y={p.slice_node_y}"
     )
@@ -449,22 +456,14 @@ def main():
     Xg, Yg = np.meshgrid(ax, ax)
 
     # ── build IC batch ───────────────────────────────────────────────────
-    # The Rössler attractor is NOT globally attracting: an IC off the basin
-    # escapes to infinity (Z→∞). Seed every node on the attractor by first
-    # integrating one isolated (uncoupled) Rössler forward, then perturb the
-    # two slice nodes' X component across the [-9, 9] grid — which stays
-    # within the attractor, so no IC starts off-basin.
-    seed  = torch.tensor([1.0, 1.0, 1.0], device=device).reshape(1, 1, 3)
-    L0    = torch.zeros(1, 1, device=device)
-    p_iso = RosslerParams(coupling=0.0, n_osc=1)
-    p_iso.dt = p.dt
-    for _ in range(p.steps_transient):
-        seed = rk4_step_batched(seed, L0, p_iso)
-    seed = seed.reshape(3)                      # (x*, y*, z*) on the attractor
-
+    # Seed near the chaotic-bursting attractor: resting membrane potential
+    # (X ≈ x_rest), recovery Y ≈ c - d*x_rest**2, slow adaptation Z small,
+    # plus small noise. Then perturb the two slice nodes' X component.
     x0  = torch.zeros((B, N, 3), dtype=torch.float32, device=device)
     x0 += 0.05 * torch.randn_like(x0)
-    x0 += seed                                   # broadcast (3,) over (B, N, 3)
+    x0[..., 0] += p.x_rest                          # membrane potential
+    x0[..., 1] += p.c - p.d * p.x_rest**2           # recovery current
+    x0[..., 2] += 2.0                               # slow adaptation
 
     x0[:, p.slice_node_x, 0] = torch.tensor(Xg.ravel(), device=device)
     x0[:, p.slice_node_y, 0] = torch.tensor(Yg.ravel(), device=device)
@@ -494,8 +493,8 @@ def main():
               f"(criterion={sel.criterion})")
         plot_selection(
             sel,
-            get_plot_path("rossler_vps_clustering", "cluster_selection.png", args.outdir),
-            title=f"DTI_A Rössler basins  coupling={p.coupling}")
+            get_plot_path("hr_vps_clustering", "cluster_selection.png", args.outdir),
+            title=f"DTI_A Hindmarsh–Rose basins  coupling={p.coupling}")
         print("[saved]    cluster_selection.png")
     else:
         k_used = int(args.k_clusters)
@@ -514,12 +513,12 @@ def main():
     ax_bm.set_xlabel(f"Node {p.slice_node_x}  X perturbation")
     ax_bm.set_ylabel(f"Node {p.slice_node_y}  X perturbation")
     ax_bm.set_title(
-        f"K-Means Basin Map — Rössler X-coupled (k={k_used})\n"
+        f"K-Means Basin Map — Hindmarsh–Rose X-coupled (k={k_used})\n"
         f"N={p.n_osc} coupling={p.coupling} grid={m}²"
     )
     plt.colorbar(im, ax=ax_bm, label="Basin label")
     plt.tight_layout()
-    plt.savefig(get_plot_path("rossler_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
+    plt.savefig(get_plot_path("hr_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
     plt.close(fig_bm)
     print(f"[saved]    basin_map_kmeans.png")
 
@@ -543,11 +542,11 @@ def main():
     ax_bd.set_xlabel(f"Node {p.slice_node_x}  X perturbation")
     ax_bd.set_ylabel(f"Node {p.slice_node_y}  X perturbation")
     ax_bd.set_title(
-        f"Basin Boundary — Rössler X-coupled\n"
+        f"Basin Boundary — Hindmarsh–Rose X-coupled\n"
         f"N={p.n_osc}  coupling={p.coupling}  grid={m}²"
     )
     plt.tight_layout()
-    plt.savefig(get_plot_path("rossler_vps_clustering", "basin_boundary.png", args.outdir), dpi=150)
+    plt.savefig(get_plot_path("hr_vps_clustering", "basin_boundary.png", args.outdir), dpi=150)
     plt.close(fig_bd)
     print("[saved]    basin_boundary.png")
 
@@ -563,11 +562,11 @@ def main():
                  label=f"fit  D_f={D_f:.3f}  R²={r_sq:.3f}")
     ax_bc.set_xlabel("Box size r")
     ax_bc.set_ylabel("Box count N(r)")
-    ax_bc.set_title("Box-Counting — Rössler X-coupled")
+    ax_bc.set_title("Box-Counting — Hindmarsh–Rose X-coupled")
     ax_bc.legend()
     ax_bc.grid(True, which="both", alpha=0.3)
     plt.tight_layout()
-    plt.savefig(get_plot_path("rossler_vps_clustering", "boxcount_loglog.png", args.outdir), dpi=150)
+    plt.savefig(get_plot_path("hr_vps_clustering", "boxcount_loglog.png", args.outdir), dpi=150)
     plt.close(fig_bc)
     print("[saved]    boxcount_loglog.png")
 
@@ -580,7 +579,7 @@ def main():
     ax_bx.set_title(f"Synthetic Fractal (boxdiv2, p={args.boxdiv_p})")
     ax_bx.axis("off")
     plt.tight_layout()
-    plt.savefig(get_plot_path("rossler_vps_clustering", "boxdiv2_synthetic.png", args.outdir), dpi=150)
+    plt.savefig(get_plot_path("hr_vps_clustering", "boxdiv2_synthetic.png", args.outdir), dpi=150)
     plt.close(fig_bx)
     print("[saved]    boxdiv2_synthetic.png")
 
@@ -598,7 +597,7 @@ def main():
     for ax in axes:
         ax.axis("off")
     plt.tight_layout()
-    plt.savefig(get_plot_path("rossler_vps_clustering", "rewired_adjacency.png", args.outdir), dpi=150)
+    plt.savefig(get_plot_path("hr_vps_clustering", "rewired_adjacency.png", args.outdir), dpi=150)
     plt.close(fig_rw)
     print("[saved]    rewired_adjacency.png")
 
@@ -606,7 +605,7 @@ def main():
     # Embed the LIVE simulation configuration so the replotter renders the
     # actual coupling and swept-node identities rather than stale defaults.
     config = dict(
-        oscillator   = "rossler",
+        oscillator   = "hindmarsh_rose",
         coupling     = float(p.coupling),
         slice_node_x = int(p.slice_node_x),
         slice_node_y = int(p.slice_node_y),
@@ -618,6 +617,11 @@ def main():
         a            = float(p.a),
         b            = float(p.b),
         c            = float(p.c),
+        d            = float(p.d),
+        s            = float(p.s),
+        r            = float(p.r),
+        x_rest       = float(p.x_rest),
+        I            = float(p.I),
         dt           = float(p.dt),
         tmax         = float(p.tmax),
     )
