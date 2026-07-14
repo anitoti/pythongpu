@@ -52,7 +52,18 @@ mkdir -p logs
 
 module load Python/3.10.4-GCCcore-11.3.0
 module load libjpeg-turbo/2.1.3-GCCcore-11.3.0
-source fmri_env/bin/activate
+
+# Activate a virtualenv only if one is present. VENV_PATH may be overridden at
+# submit time (--export=ALL,VENV_PATH=/path/to/venv); when it is absent the job
+# falls back to the module Python plus any user-site (~/.local) packages, which
+# is how the ACRES environment is provisioned.
+: "${VENV_PATH:=fmri_env}"
+if [ -f "${VENV_PATH}/bin/activate" ]; then
+    source "${VENV_PATH}/bin/activate"
+    echo "Activated virtualenv: ${VENV_PATH}"
+else
+    echo "No virtualenv at '${VENV_PATH}'; using module Python + user-site packages."
+fi
 
 # Defragment GPU memory segments to avoid allocator fragmentation.
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
