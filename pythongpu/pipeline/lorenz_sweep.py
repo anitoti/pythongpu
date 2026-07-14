@@ -71,7 +71,6 @@ from pathlib import Path
 # ── third-party ─────────────────────────────────────────────────────────────
 import numpy as np
 import torch
-from scipy.io import loadmat
 from tqdm import tqdm
 
 from pythongpu.utils import get_plot_path
@@ -442,6 +441,14 @@ def main():
     ap.add_argument("--cluster-criterion", default="consensus",
         choices=["consensus", "elbow", "bic", "silhouette"],
         help="Model-selection criterion that sets K when --k-clusters=auto.")
+    ap.add_argument("--null-reps",  type=int,   default=0,
+        help="With --k-clusters=auto, run a structure-vs-noise guard with this "
+             "many column-shuffle null reps; if the features carry no separable "
+             "structure the sweep records a single basin (k=1) instead of "
+             "fabricating basins. 0 (default) disables the guard.")
+    ap.add_argument("--min-silhouette", type=float, default=0.10,
+        help="Silhouette floor the real optimum must exceed to count as "
+             "structured under --null-reps.")
     ap.add_argument("--boxdiv-p",   type=float, default=0.7,
         help="Boxdiv2 survival probability.")
     ap.add_argument("--rewire-n",   type=int,   default=5,
@@ -538,12 +545,19 @@ def main():
         print("[cluster]  dynamic K selection "
               "(Elbow + BIC + Silhouette), k=2..15 ...")
         sel = select_optimal_clusters(
-            vectors, k_min=2, k_max=15, criterion=args.cluster_criterion)
+            vectors, k_min=2, k_max=15, criterion=args.cluster_criterion,
+            null_reps=args.null_reps, min_silhouette=args.min_silhouette)
         k_used = sel.best_k
+        structured = sel.structured
         labels = sel.labels.reshape(m, m).astype(np.int32)
-        print(f"[cluster]  elbow={sel.k_elbow}  BIC={sel.k_bic}  "
-              f"silhouette={sel.k_silhouette}  ->  K={k_used} "
-              f"(criterion={sel.criterion})")
+        if not sel.structured:
+            print(f"[cluster]  NULL GUARD: no separable structure "
+                  f"(null_p95={sel.null_p95:.3f}) -> single basin (k=1); "
+                  f"box-counting skipped, D_f undefined.")
+        else:
+            print(f"[cluster]  elbow={sel.k_elbow}  BIC={sel.k_bic}  "
+                  f"silhouette={sel.k_silhouette}  ->  K={k_used} "
+                  f"(criterion={sel.criterion})")
         plot_selection(
             sel,
             get_plot_path("lorenz_vps_clustering", "cluster_selection.png", args.outdir),
@@ -551,6 +565,7 @@ def main():
         print("[saved]    cluster_selection.png")
     else:
         k_used = int(args.k_clusters)
+        structured = True
         print(f"[kmeans]   GPU Lloyd's  k={k_used} (user-forced) ...")
         labels_gpu = kmeans_gpu(vectors_gpu, k=k_used)
         labels     = labels_gpu.cpu().numpy().reshape(m, m)
@@ -572,18 +587,28 @@ def main():
     plt.tight_layout()
     plt.savefig(get_plot_path("lorenz_vps_clustering", "basin_map_kmeans.png", args.outdir), dpi=150)
     plt.close(fig_bm)
-    print(f"[saved]    basin_map_kmeans.png")
+    print("[saved]    basin_map_kmeans.png")
 
     # ── Basin boundary + box-counting ────────────────────────────────────
     boundary  = extract_boundary(labels)
-    r, n      = boxcount_2d_gpu(boundary, device)
-    D_f, r_sq = fractal_dimension(r, n)
-    print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
-    print(
-        f"           D_f ≈ 1.0 → smooth curve\n"
-        f"           D_f ≈ 2.0 → space-filling\n"
-        f"           Expected chimera range: ~1.2–1.8"
-    )
+    # A single basin (e.g. the null guard's k=1, or a fully synchronized slice)
+    # has no boundary, so the box-counting fractal dimension is undefined rather
+    # than 0 — skip the fit instead of feeding empty arrays to polyfit.
+    has_boundary = bool(boundary.any())
+    if has_boundary:
+        r, n      = boxcount_2d_gpu(boundary, device)
+        D_f, r_sq = fractal_dimension(r, n)
+        print(f"[fractal]  D_f = {D_f:.4f}  (R² = {r_sq:.4f})")
+        print(
+            "           D_f ≈ 1.0 → smooth curve\n"
+            "           D_f ≈ 2.0 → space-filling\n"
+            "           Expected chimera range: ~1.2–1.8"
+        )
+    else:
+        r = np.array([], dtype=np.int64)
+        n = np.array([], dtype=np.int64)
+        D_f, r_sq = float("nan"), float("nan")
+        print("[fractal]  single basin — no boundary; D_f undefined (skipped).")
 
     fig_bd, ax_bd = plt.subplots(figsize=(7, 6))
     ax_bd.imshow(
@@ -601,25 +626,28 @@ def main():
     plt.close(fig_bd)
     print("[saved]    basin_boundary.png")
 
-    mask      = n > 0
-    log_r_fit = np.log(r[mask].astype(float))
-    log_n_fit = np.polyval(
-        np.polyfit(log_r_fit, np.log(n[mask].astype(float)), 1),
-        log_r_fit,
-    )
-    fig_bc, ax_bc = plt.subplots(figsize=(6, 5))
-    ax_bc.loglog(r[mask], n[mask], "o-", color="crimson", label="box count")
-    ax_bc.loglog(r[mask], np.exp(log_n_fit), "--", color="navy",
-                 label=f"fit  D_f={D_f:.3f}  R²={r_sq:.3f}")
-    ax_bc.set_xlabel("Box size r")
-    ax_bc.set_ylabel("Box count N(r)")
-    ax_bc.set_title("Box-Counting — Fractal Dimension")
-    ax_bc.legend()
-    ax_bc.grid(True, which="both", alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(get_plot_path("lorenz_vps_clustering", "boxcount_loglog.png", args.outdir), dpi=150)
-    plt.close(fig_bc)
-    print("[saved]    boxcount_loglog.png")
+    if has_boundary:
+        mask      = n > 0
+        log_r_fit = np.log(r[mask].astype(float))
+        log_n_fit = np.polyval(
+            np.polyfit(log_r_fit, np.log(n[mask].astype(float)), 1),
+            log_r_fit,
+        )
+        fig_bc, ax_bc = plt.subplots(figsize=(6, 5))
+        ax_bc.loglog(r[mask], n[mask], "o-", color="crimson", label="box count")
+        ax_bc.loglog(r[mask], np.exp(log_n_fit), "--", color="navy",
+                     label=f"fit  D_f={D_f:.3f}  R²={r_sq:.3f}")
+        ax_bc.set_xlabel("Box size r")
+        ax_bc.set_ylabel("Box count N(r)")
+        ax_bc.set_title("Box-Counting — Fractal Dimension")
+        ax_bc.legend()
+        ax_bc.grid(True, which="both", alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(get_plot_path("lorenz_vps_clustering", "boxcount_loglog.png", args.outdir), dpi=150)
+        plt.close(fig_bc)
+        print("[saved]    boxcount_loglog.png")
+    else:
+        print("[skip]     boxcount_loglog.png — single basin, no boundary to fit.")
 
     # ── Boxdiv2 synthetic fractal ────────────────────────────────────────
     # [Page 37, full_.m_script.pdf: boxdiv2 recursive 2D subdivision]
@@ -667,6 +695,7 @@ def main():
         n_osc        = int(p.n_osc),
         grid_n       = int(m),
         k_clusters   = int(k_used),
+        structured   = bool(structured),
         grid_lo      = -9.0,
         grid_hi      = 9.0,
         sigma        = float(p.sigma),
