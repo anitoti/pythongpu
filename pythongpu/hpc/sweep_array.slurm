@@ -114,7 +114,15 @@ python3 -m pythongpu.pipeline.lorenz_sweep \
 # archived under TASK_OUTDIR.  
 FRAME_GALLERY="${RESULTS_ROOT}/frames"
 mkdir -p "$FRAME_GALLERY"
-cp "${TASK_OUTDIR}/basin_map_kmeans.png" \
-   "${FRAME_GALLERY}/frame_${FRAME_IDX}.png"
 
-echo "Array element ${TASK_ID} complete: K=${COUPLING} -> frame_${FRAME_IDX}.png"
+# lorenz_sweep writes plots into <outdir>/derivatives/ with a module-name
+# prefix (e.g. lorenz_vps_clustering__basin_map_kmeans.png), so resolve the
+# basin map by glob rather than assuming a bare name at the task-dir root.
+BASIN_PNG=$(ls "${TASK_OUTDIR}"/derivatives/*basin_map_kmeans.png 2>/dev/null | head -1)
+if [ -n "$BASIN_PNG" ]; then
+    cp "$BASIN_PNG" "${FRAME_GALLERY}/frame_${FRAME_IDX}.png"
+    echo "Array element ${TASK_ID} complete: K=${COUPLING} -> frame_${FRAME_IDX}.png"
+else
+    echo "ERROR: no basin_map_kmeans.png under ${TASK_OUTDIR}/derivatives" >&2
+    exit 1
+fi
