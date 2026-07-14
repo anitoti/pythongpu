@@ -132,10 +132,13 @@ R2     = 1.0 - ss_res / ss_tot
 
 print(f"\nFractal dimension  D_f = {D_f:.4f}")
 print(f"Fit R²              = {R2:.4f}")
-print(f"Interpretation      : ", end="")
-if   D_f < 1.05: print("smooth curve — likely under-resolved or K too small")
-elif D_f > 1.95: print("space-filling — likely noise, not fractal structure")
-else:            print(f"fractal boundary  ✓  ({1:.0f} < {D_f:.3f} < {2:.0f})")
+print("Interpretation      : ", end="")
+if D_f < 1.05:
+    print("smooth curve — likely under-resolved or K too small")
+elif D_f > 1.95:
+    print("space-filling — likely noise, not fractal structure")
+else:
+    print(f"fractal boundary  ✓  ({1:.0f} < {D_f:.3f} < {2:.0f})")
 
 
 # ── 4. PLOT ──────────────────────────────────────────────────
@@ -156,8 +159,10 @@ ax0.set_title(f'Basin Boundary  (K={K_clus} clusters)\n'
 
 ticks      = [-np.pi, -np.pi/2, 0, np.pi/2, np.pi]
 ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
-ax0.set_xticks(ticks); ax0.set_xticklabels(ticklabels)
-ax0.set_yticks(ticks); ax0.set_yticklabels(ticklabels)
+ax0.set_xticks(ticks)
+ax0.set_xticklabels(ticklabels)
+ax0.set_yticks(ticks)
+ax0.set_yticklabels(ticklabels)
 
 # ── 4b. Box-counting log-log plot ────────────────────────────
 # Mirrors MATLAB: "loglog(r, n, 's-')" [full_.m_script.pdf, Page 24-25]

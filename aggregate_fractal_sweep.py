@@ -177,8 +177,8 @@ def compile_video(frames_dir: str, out_mp4: str, fps: int, bitrate: str,
     print(f"[video]    {len(frames)} frames x hold {hold} = {len(seq)} @ "
           f"{fps} fps  ->  {dur:.2f} s")
     if dur < 2:
-        print(f"[hint]     still a short clip; raise --hold or set "
-              f"--duration 10 for a smooth ~10 s sweep.")
+        print("[hint]     still a short clip; raise --hold or set "
+              "--duration 10 for a smooth ~10 s sweep.")
 
     if shutil.which("ffmpeg"):
         _ffmpeg(seq, out_mp4, fps, bitrate)

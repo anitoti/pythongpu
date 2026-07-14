@@ -63,8 +63,8 @@ cbar.ax.text(1.6, cfg['sync_threshold'],
              f"R={cfg['sync_threshold']}", va='center',
              fontsize=8, color='cyan')
 
-ax.set_xlabel(f"$x_0(0)$ — Node 0 initial phase", fontsize=12)
-ax.set_ylabel(f"$x_1(0)$ — Node 1 initial phase", fontsize=12)
+ax.set_xlabel("$x_0(0)$ — Node 0 initial phase", fontsize=12)
+ax.set_ylabel("$x_1(0)$ — Node 1 initial phase", fontsize=12)
 ax.set_title('Kuramoto Basin Map — Continuous $R$\n'
              f'N={cfg["n_nodes"]}, M={cfg["n_edges"]}, '
              f'K={cfg["coupling"]}, T={cfg["tmax"]}',
@@ -73,8 +73,10 @@ ax.set_title('Kuramoto Basin Map — Continuous $R$\n'
 # Axis ticks in units of π — matches standard phase-space convention
 ticks     = [-np.pi, -np.pi/2, 0, np.pi/2, np.pi]
 ticklabels = [r'$-\pi$', r'$-\pi/2$', r'$0$', r'$\pi/2$', r'$\pi$']
-ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
-ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+ax.set_xticks(ticks)
+ax.set_xticklabels(ticklabels)
+ax.set_yticks(ticks)
+ax.set_yticklabels(ticklabels)
 
 plt.tight_layout()
 plt.savefig(get_plot_path('plot_kuramoto_basins', 'basin_map_continuous.png'), bbox_inches='tight')
@@ -118,15 +120,17 @@ for k in range(K_clus):
                marker='s',                   # [Page 37]: h(i).Marker = 's'
                label=f'Basin {k+1}')
 
-ax.set_xlabel(f"$x_{{0}}(0)$ — Node 0 initial phase", fontsize=12)
-ax.set_ylabel(f"$x_{{1}}(0)$ — Node 1 initial phase", fontsize=12)
+ax.set_xlabel("$x_{0}(0)$ — Node 0 initial phase", fontsize=12)
+ax.set_ylabel("$x_{1}(0)$ — Node 1 initial phase", fontsize=12)
 ax.set_title(f'Kuramoto Basin Map — $K={K_clus}$ Clusters\n'
              f'N={cfg["n_nodes"]}, M={cfg["n_edges"]}, '
              f'K_coup={cfg["coupling"]}, T={cfg["tmax"]}',
              fontsize=11)
 
-ax.set_xticks(ticks); ax.set_xticklabels(ticklabels)
-ax.set_yticks(ticks); ax.set_yticklabels(ticklabels)
+ax.set_xticks(ticks)
+ax.set_xticklabels(ticklabels)
+ax.set_yticks(ticks)
+ax.set_yticklabels(ticklabels)
 ax.set_xlim(Xg.min(), Xg.max())
 ax.set_ylim(Yg.min(), Yg.max())             # [Page 37]: xlim/ylim from data
 ax.legend(markerscale=4, fontsize=8,
@@ -140,7 +144,7 @@ print(f"Saved → basin_map_kmeans.png  (K={K_clus} clusters)")
 
 # ── 3. SUMMARY STATS ─────────────────────────────────────────
 synced = (R >= cfg['sync_threshold']).mean()
-print(f"\n── Basin Statistics ──────────────────────────")
+print("\n── Basin Statistics ──────────────────────────")
 print(f"Grid resolution : {m}×{m} = {m*m} initial conditions")
 print(f"R  mean         : {R.mean():.4f}")
 print(f"R  std          : {R.std():.4f}")

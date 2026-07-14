@@ -37,7 +37,7 @@ class HindmarshRoseNetwork(BaseOscillator):
         r=0.006,
         s=4.0,
         x_rest=-1.6,
-        I=3.2,
+        I=3.2,  # noqa: E741
         coupling=0.1,
         device="cpu",
     ):

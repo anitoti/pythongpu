@@ -16,14 +16,12 @@ python3 pipeline/lorenz_basins_sweep.py
 """
 
 import os
-import math
 import numpy as np
 import torch
-import networkx as nx
 from dataclasses import dataclass, asdict
 
 from pythongpu.oscillators.lorenz import LorenzNetwork
-from pythongpu.networks.static_adjacency import load_dti_laplacian
+from pythongpu.networks.random_graphs import generate_gnm_laplacian
 
 
 # -- 1. CONFIG ------------------------------------------------
@@ -100,8 +98,9 @@ def build_ic_grid(cfg: Config):
 
 # -- 3. MAIN INTEGRATION LOOP ---------------------------------
 def run_sweep(cfg: Config):
-    dev = torch.device(cfg.device)
-    A   = load_graph(cfg)
+    A = generate_gnm_laplacian(cfg.n_nodes, cfg.n_edges,
+                               device=cfg.device, seed=cfg.graph_seed,
+                               norm=None, plot=False)
 
     # Build Laplacian (unweighted)
     D = torch.diag(A.sum(dim=1))

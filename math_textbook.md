@@ -18,11 +18,15 @@
   - [I.5 The Vector Pattern State — Definition A (lag–norm signature)](#i5-the-vector-pattern-state--definition-a-lagnorm-signature)
   - [I.6 The Vector Pattern State — Definition B (neighbor-relative coherence)](#i6-the-vector-pattern-state--definition-b-neighbor-relative-coherence)
   - [I.7 From VPS to labels: model-order selection](#i7-from-vps-to-labels-model-order-selection)
+    - [I.7a Consensus selection: elbow, BIC, silhouette, and the structure-vs-noise null guard](#i7a-consensus-selection-elbow-bic-silhouette-and-the-structure-vs-noise-null-guard)
+    - [I.7b Emergent attractor counts: DBSCAN with an auto-selected radius](#i7b-emergent-attractor-counts-dbscan-with-an-auto-selected-radius)
 - [Part II — Fractal Basin Boundaries and Causation Entropy](#part-ii--fractal-basin-boundaries-and-causation-entropy)
   - [II.1 Basins of attraction and the initial-condition slice](#ii1-basins-of-attraction-and-the-initial-condition-slice)
   - [II.2 Boundary extraction](#ii2-boundary-extraction)
   - [II.3 The box-counting dimension](#ii3-the-box-counting-dimension)
   - [II.4 Final-state sensitivity and the uncertainty exponent](#ii4-final-state-sensitivity-and-the-uncertainty-exponent)
+  - [II.4a Basin entropy and the Daza Wada-suspect criterion](#ii4a-basin-entropy-and-the-daza-wada-suspect-criterion)
+  - [II.4b The grid (dilation) Wada-bounds test](#ii4b-the-grid-dilation-wada-bounds-test)
   - [II.5 Causation entropy: differential entropy and Gaussian closed forms](#ii5-causation-entropy-differential-entropy-and-gaussian-closed-forms)
   - [II.6 Conditional mutual information and the oCSE algorithm](#ii6-conditional-mutual-information-and-the-ocse-algorithm)
   - [II.7 The chi-squared significance test](#ii7-the-chi-squared-significance-test)
@@ -149,6 +153,39 @@ $$
 $$
 
 The coupling operator here is exactly $\sigma\,(L\otimes\mathbf H)$ with $\mathbf H=\mathrm{diag}(1,0)$, the Kronecker form documented in the module.
+
+**Hindmarsh–Rose network** (`oscillators/hindmarsh_rose.py`, defaults $a=1,\ b=3,\ c=1,\ d=5,\ r=0.006,\ s=4,\ x_{\text{rest}}=-1.6,\ I=3.2$), a slow–fast neuron model with $\mathbf u_i=(X_i,Y_i,Z_i)$ and $\mathbf H=\mathrm{diag}(1,0,0)$:
+
+$$
+\begin{aligned}
+\dot X_i &= Y_i - a\,X_i^{3} + b\,X_i^{2} - Z_i + I \;-\; \sigma\,(LX)_i,\\
+\dot Y_i &= c - d\,X_i^{2} - Y_i,\\
+\dot Z_i &= r\big(s\,(X_i - x_{\text{rest}}) - Z_i\big).
+\end{aligned}
+\tag{I.5a}
+$$
+
+$X_i$ is the fast membrane potential, $Y_i$ the fast recovery current, and $Z_i$ a slow adaptation variable whose small rate constant $r\ll1$ separates the two time scales: on the fast $(X,Y)$ plane the system spikes, while $Z$ integrates the spiking history over the much longer time scale $1/r\approx167$ and organizes it into bursts. This time-scale separation has a direct consequence for basin sweeps: with the default parameters the network needs an integration horizon far longer than the $t_{\max}=30$ window sufficient for the other three systems before trajectories on the affine 2-slice diverge into distinguishable long-time behavior — at short horizons the coherence field saturates and every basin sweep collapses to one trivial partition, which is why the coupled-network experiments in Part II default to Lorenz rather than Hindmarsh–Rose for the topology and node-switching studies.
+
+**Chua's-circuit network** (`oscillators/chua.py`, canonical double-scroll parameters $\alpha=15.6,\ \beta=28,\ m_0=-8/7,\ m_1=-5/7$), a third autonomous chaotic exemplar with $\mathbf u_i=(X_i,Y_i,Z_i)$ and $\mathbf H=\mathrm{diag}(1,0,0)$:
+
+$$
+\begin{aligned}
+\dot X_i &= \alpha\big(Y_i - X_i - f(X_i)\big) \;-\; \sigma\,(LX)_i,\\
+\dot Y_i &= X_i - Y_i + Z_i,\\
+\dot Z_i &= -\beta\,Y_i,
+\end{aligned}
+\tag{I.5b}
+$$
+
+where $f$ is the piecewise-linear **Chua-diode** characteristic
+
+$$
+f(X) \;=\; m_1 X + \tfrac12(m_0-m_1)\big(\lvert X+1\rvert - \lvert X-1\rvert\big),
+\tag{I.5c}
+$$
+
+a three-segment odd-symmetric nonlinear resistor with inner slope $m_0$ (for $\lvert X\rvert<1$) and outer slope $m_1$ (for $\lvert X\rvert>1$). At the canonical parameters the uncoupled unit exhibits the double-scroll attractor: a single bounded chaotic trajectory whose $X$-coordinate visits both signs while remaining confined, the two "scrolls" corresponding to the two outer linear regions of $f$.
 
 **FitzHugh–Nagumo network** (`oscillators/fitzhugh_nagumo.py`). The class declares parameters $a=0.7,\ b=0.8,\ \tau=12.5$ but its `rhs` currently raises `NotImplementedError`; it is a declared interface awaiting an implementation. For completeness, the intended dynamics (excitable relaxation oscillator, $\mathbf u_i=(V_i,W_i)$) are
 
@@ -342,6 +379,59 @@ $$
 
 The resulting label vector, reshaped onto the two-dimensional initial-condition grid of Part II, is the raw material for the basin-boundary geometry.
 
+### I.7a Consensus selection: elbow, BIC, silhouette, and the structure-vs-noise null guard
+
+`processing/basin_clustering.py::select_optimal_clusters` supersedes a once hand-transcribed constant ("k=8 was found optimal") with an auditable sweep over $k\in[k_{\min},k_{\max}]$ combining three criteria on a $z$-scored, optionally PCA-reduced feature matrix $X$.
+
+**Elbow (Kneedle).** The within-cluster sum of squares $W(k)=\mathrm{SSE}(k)$ (`inertia_`) is monotone decreasing; its knee is located by the **Kneedle** chord-distance heuristic (Satopää et al. 2011). Both axes are min–max normalized to $x_k,y_k\in[0,1]$, and the knee is the point of maximal perpendicular distance from the chord joining the curve's endpoints $(x_0,y_0)\to(x_1,y_1)$:
+
+$$
+d(k) \;=\; \frac{\big\lvert (y_1-y_0)x_k - (x_1-x_0)y_k + x_1y_0 - y_1x_0\big\rvert}{\sqrt{(y_1-y_0)^2+(x_1-x_0)^2}},
+\qquad
+k_{\text{elbow}} \;=\; \arg\max_k d(k).
+\tag{I.23}
+$$
+
+The identical Kneedle formula (I.23) is reused verbatim by `pipeline/attractor_id.py` to locate the knee of the sorted $k$-distance graph in §I.7b — a single scale-free knee-finder serves both an inertia curve and a nearest-neighbor-distance curve.
+
+**Gaussian-mixture BIC.** Distinct from the isotropic pooled-variance BIC of (I.21)–(I.22), here a **full-covariance** Gaussian mixture with $k$ components is fit at each candidate $k$ and scored by `sklearn`'s canonical
+$\mathrm{BIC}(k) = -2\ln\hat{\mathcal L}(k) + p(k)\ln n$, with $p(k)$ the free-parameter count of a full-covariance $k$-component mixture in $d$ dimensions; $k_{\text{bic}}=\arg\min_k\mathrm{BIC}(k)$. Allowing full covariance (rather than the isotropic assumption of §I.7) guards against the elbow's tendency to over-segment anisotropic clusters.
+
+**Silhouette.** As in (I.20), $k_{\text{silhouette}}=\arg\max_k S(k)$, subsampled to a fixed budget for tractability on wide VPS blocks.
+
+**Consensus.** The reported cluster count is the rounded median of the three optima,
+$$
+k^\star \;=\; \mathrm{round}\big(\mathrm{median}(k_{\text{elbow}},\,k_{\text{bic}},\,k_{\text{silhouette}})\big),
+\tag{I.24}
+$$
+clipped to $[k_{\min},k_{\max}]$ — a majority-vote-like estimate that is robust to any single criterion's idiosyncratic bias, with all three curves retained for audit.
+
+**Structure-vs-noise null guard.** A near-degenerate feature blob (e.g. a synchronized regime with no real basin structure) can still yield a spurious elbow/BIC optimum $>1$. To prevent fabricating basins out of noise, the best silhouette achievable on the real (PCA-reduced) features, $s^\star_{\text{real}}=\max_k S(k)$, is compared against a **column-shuffle null**: each feature column is independently permuted (destroying joint cluster structure while preserving every marginal distribution), the same best-silhouette statistic $s^\star_{\text{null}}$ is recomputed on the shuffled matrix, and this is repeated to build an empirical null distribution. The features are declared **structured** — and clustering trusted — only if
+
+$$
+\boxed{\; s^\star_{\text{real}} \;>\; \mathrm{P}_{95}\big(s^\star_{\text{null}}\big) \quad\text{and}\quad s^\star_{\text{real}} \ge s_{\min} \;}
+\tag{I.25}
+$$
+
+(default floor $s_{\min}=0.10$). If (I.25) fails, $k^\star$ is forced to $1$ (a single basin) regardless of what the elbow/BIC/silhouette curves individually suggest — the count is measured, not tuned, and a flat feature landscape is reported honestly as "no attractors distinguishable" rather than an arbitrary split.
+
+### I.7b Emergent attractor counts: DBSCAN with an auto-selected radius
+
+`pipeline/attractor_id.py` addresses a structural limitation of every $k$-means-based scheme above: $k$-means always returns exactly $k$ nonempty groups, so it can never report "there is only one attractor here" as a *discovered* fact rather than an edge case of a sweep. The alternative is density-based clustering, whose cluster count is an **output**, not an input.
+
+**Descriptors.** Each initial condition is reduced to an *attractor-invariant* summary — either the coherence VPS $\mathbf C$ of (I.18) already stored from a completed sweep, or, when integrating from scratch, the per-node long-time moments of the fast coordinate over the recorded (post-transient) window,
+$$
+\bar X_i = \langle X_i\rangle,\qquad
+\sigma_{X_i} = \sqrt{\langle X_i^2\rangle-\bar X_i^2},\qquad
+\overline{\lvert X_i\rvert} = \langle\lvert X_i\rvert\rangle,
+\tag{I.26}
+$$
+concatenated into a $3N$-vector per initial condition. Being long-time averages, all of (I.26) are (to sampling error) constant along a single trajectory once it has settled onto its attractor, exactly as required of an attractor-invariant descriptor.
+
+**Auto-radius via the $k$-distance knee.** After standardizing and (if wide) PCA-reducing the descriptor matrix, DBSCAN's neighborhood radius $\varepsilon$ is not hand-set but read off the data: for each point, the distance to its $m$-th nearest neighbor ($m=$ `min_samples`) is computed, these distances are sorted ascending into the **$k$-distance graph**, and $\varepsilon_0$ is set to the value at the graph's knee — located by the same Kneedle formula (I.23), applied to the sorted-distance curve instead of an inertia curve. This is the standard DBSCAN radius-selection heuristic (Ester et al. 1996; Kneedle: Satopää et al. 2011).
+
+**Radius-sensitivity scan.** DBSCAN is run at $\varepsilon\in\{0.7\varepsilon_0,\ 1.0\varepsilon_0,\ 1.4\varepsilon_0\}$; the attractor count is the number of non-noise clusters at $\varepsilon_0$, and the estimate is flagged **radius-stable** only if all three scales agree. An emergent count is trustworthy exactly when it is insensitive to the arbitrary choice of neighborhood scale — the analogue, for cluster *count*, of the $R^2$ goodness-of-fit check on $D_f$ in (II.9).
+
 ---
 
 # Part II — Fractal Basin Boundaries and Causation Entropy
@@ -438,6 +528,63 @@ f(\varepsilon) \;\sim\; \varepsilon^{\,\gamma},
 $$
 
 where $d$ is the dimension of the sampled space ($d=2$ for the planar slice of §II.1). A near-integer boundary ($D_f\approx 1$) gives $\gamma\approx 1$: halving the measurement error roughly halves the uncertain fraction. A space-filling fractal boundary ($D_f\to 2$) gives $\gamma\to 0$: reducing the error buys *almost no* predictive gain. Thus $D_f$ is not merely a geometric descriptor but the exponent governing how quickly final-state prediction improves with initial-condition precision — the quantitative statement of "fractal basin boundary $\Rightarrow$ practically unpredictable outcome."
+
+**Numerical estimator** (`box_counting.uncertainty_exponent`). On the discrete label image $\mathcal L$, a pixel is **$\varepsilon$-uncertain** if some $L^\infty$ perturbation of radius up to $\varepsilon$ pixels can move it into a different basin — i.e. if the $(2\varepsilon+1)\times(2\varepsilon+1)$ neighborhood spans more than one integer label. Since labels are integers, this indicator is exactly a max/min-filter mismatch:
+$$
+U_\varepsilon \;=\; \mathbb 1\!\big[\,\mathrm{maxfilter}_{2\varepsilon+1}(\mathcal L) \;\ne\; \mathrm{minfilter}_{2\varepsilon+1}(\mathcal L)\,\big],
+\qquad
+f(\varepsilon) \;=\; \langle U_\varepsilon\rangle,
+\tag{II.10a}
+$$
+evaluated over a radius ladder $\varepsilon\in\{1,2,3,4,6,8,12,16\}$ pixels. Radii with a saturated ($f=1$) or empty ($f=0$) response carry no scaling information and are dropped; $\gamma$ is the OLS slope of $\ln f(\varepsilon)$ against $\ln\varepsilon$ over the remaining radii, exactly as in (II.8)–(II.9). Because $\gamma$ is a *scaling slope* rather than a raw pixel tally, it is invariant to the grid resolution used to sample $\Sigma$ — refining the grid rescales $\varepsilon$ uniformly and leaves the fitted slope unchanged — making $D_f=d-\gamma$ from (II.10) a grid-independent cross-check of the box-counting $D_f$ of §II.3, which *is* resolution-dependent through its pixelation. Agreement between the two estimators (e.g. $\gamma=0.259\Rightarrow D_f=1.741$ against a box-counting fit of $D_f=1.748$ on the same slice) certifies that the fractal signature is a property of the flow, not an artifact of one particular numerical method.
+
+**Structural universality case study.** Cloning the degree sequence of the empirical `data/DTI_A.mat` connectome (83 nodes, 850 edges) via the configuration model (stub-matching; `networkx.configuration_model`) — which reproduces the exact degree sequence while destroying every higher-order structural feature — and comparing $\gamma$, $D_f$ against Erdős–Rényi and Barabási–Albert nulls at matched edge count (Lorenz network, $K=0.25$) gave $\gamma=0.245\pm0.068$ (configuration model), $0.172\pm0.029$ (ER), $0.198\pm0.083$ (BA): all three overlap within one standard deviation (cross-family spread $0.072$). The interpretation is that, for this substrate and coupling, basin fractality is set essentially by the **degree distribution** alone rather than by finer topological detail — a structurally universal result, with the $D_f=2-\gamma$ identity of (II.10) independently reproduced by both the uncertainty-exponent and box-counting estimators in every realization.
+
+## II.4a Basin entropy and the Daza Wada-suspect criterion
+
+A second, entropy-based route to quantifying basin-boundary complexity — complementary to the geometric $D_f$ of §II.3 — comes from Daza et al.'s **basin entropy** (`pipeline/universality_sweep.py::basin_entropy`). Cover the labeled slice $\mathcal L$ with disjoint $\varepsilon\times\varepsilon$ boxes (padding the image with a massless sentinel label so every box is full-sized). Within box $i$, let $p_{i,j}$ be the empirical fraction of the box's pixels carrying basin label $j$; the box's **Gibbs entropy** is
+$$
+S_i \;=\; -\sum_j p_{i,j}\,\ln p_{i,j}.
+\tag{II.10b}
+$$
+Two averages of (II.10b) are reported:
+$$
+S_b \;=\; \big\langle S_i\big\rangle_{\text{all occupied boxes}}
+\qquad\text{(basin entropy)},
+\qquad\qquad
+S_{bb} \;=\; \big\langle S_i\big\rangle_{\text{boundary boxes only}}
+\qquad\text{(boundary basin entropy)},
+\tag{II.10c}
+$$
+where a **boundary box** is one whose interior meets $\ge2$ distinct basin labels. $S_b$ summarizes uncertainty over the whole slice; $S_{bb}$ isolates it to the boundary region, so it is the more sensitive fractality diagnostic — a smooth 1-D boundary contributes only thin strips of mixed boxes to the average, while a space-filling boundary makes nearly every box a boundary box.
+
+**Wada-suspect criterion.** With the natural-log convention, a boundary box that only ever straddles **two** basins has entropy bounded above by the two-outcome maximum $\ln 2$ (attained at the uniform $50/50$ split). Consequently
+$$
+\boxed{\; S_{bb} \;>\; \ln 2 \;\;\Longrightarrow\;\; \text{Wada-suspect} \;}
+\tag{II.10d}
+$$
+is a **sufficient** (not necessary) condition for the boundary to have the **Wada property** — every boundary point borders *all* coexisting basins, not just two — since exceeding $\ln 2$ requires boundary boxes to routinely contain three or more basins with enough evenness to push the average past the two-basin ceiling. `basin_entropy` returns $S_b$, $S_{bb}$, the occupied/boundary box counts, and the boolean `wada_suspect` flag used throughout the coupling-sweep and topology-comparison experiments of `universality_sweep.py`.
+
+## II.4b The grid (dilation) Wada-bounds test
+
+A second, purely combinatorial certificate of the Wada property comes from the **grid (neighborhood) form** of the Daza et al. Wada test (`analyze_wada.py::daza_wada`), independent of the entropy functional of §II.4a. For each basin label $b$, form the binary indicator $I_b=\mathbb 1[\mathcal L=b]$ and morphologically dilate it by an $8$-connected structuring element of radius $r$ (default $r=1$). The per-pixel **coverage**
+$$
+C(x) \;=\; \sum_b \mathrm{dilate}_r\big(I_b\big)(x)
+\tag{II.10e}
+$$
+counts how many distinct basins have a representative within radius $r$ of $x$. Background/masked pixels are excluded so they never inflate a boundary count. Three nested sets follow:
+$$
+\text{boundary} = \{x: C(x)\ge2\},\qquad
+\text{Wada} = \{x: C(x)\ge3\},\qquad
+\text{strict} = \{x: C(x)\ge n_{\text{basins}}\}\ (n_{\text{basins}}\ge3),
+\tag{II.10f}
+$$
+i.e. a **Wada point** borders at least three basins, and a **strict** point borders *every* coexisting basin. The reported summary statistic, the **Wada-boundary coverage fraction**
+$$
+\mathrm{frac}_{\text{Wada}} \;=\; \frac{\lvert\text{Wada}\rvert}{\lvert\text{boundary}\rvert} \;\in\;[0,1],
+\tag{II.10g}
+$$
+measures what proportion of the boundary is a genuine triple(-or-more)-junction rather than a simple two-basin edge; $\mathrm{frac}_{\text{Wada}}\approx1$ (with the strict fraction also near $1$) is the discrete analogue of declaring the whole boundary Wada. On the real coupling-sweep basin maps (5 coexisting basins, near-space-filling $D_f\approx1.999$), this test finds $\approx97\%$ Wada-boundary coverage but only $\approx2\%$ strict coverage — almost every boundary point borders three-or-more basins, but rarely all five at once — a finer-grained picture than the box-entropy sufficient condition (II.10d) alone provides, since (II.10e)–(II.10g) directly counts basin memberships rather than inferring them from an entropy bound.
 
 ## II.5 Causation entropy: differential entropy and Gaussian closed forms
 
@@ -781,6 +928,12 @@ The output CSV is in long format with columns `roi, q, hurst, tau, alpha, f_alph
 7. K. Falconer. *Fractal Geometry: Mathematical Foundations and Applications.* Wiley, 3rd ed., 2014.
 8. T. C. Halsey, M. H. Jensen, L. P. Kadanoff, I. Procaccia, B. I. Shraiman. *Fractal measures and their singularities.* Phys. Rev. A **33** (1986) 1141.
 9. R. Pfister, K. A. Schwarz, M. Janczyk, R. Dale, J. Freeman. *Good things peak in pairs: a note on the bimodality coefficient.* Frontiers in Psychology **4** (2013) 700.
+10. J. L. Hindmarsh, R. M. Rose. *A model of neuronal bursting using three coupled first order differential equations.* Proc. R. Soc. Lond. B **221** (1984) 87–102.
+11. L. O. Chua. *The genesis of Chua's circuit.* Archiv für Elektronik und Übertragungstechnik **46** (1992) 250–257.
+12. A. Daza, A. Wagemakers, B. Georgeot, D. Guéry-Odelin, M. A. F. Sanjuán. *Basin entropy: a new tool to analyze uncertainty in dynamical systems.* Scientific Reports **6** (2016) 31416.
+13. A. Daza, A. Wagemakers, M. A. F. Sanjuán. *A grid algorithm to identify basins of attraction and the Wada property.* Chaos **28** (2018) 093117.
+14. M. Ester, H.-P. Kriegel, J. Sander, X. Xu. *A density-based algorithm for discovering clusters in large spatial databases with noise (DBSCAN).* Proc. KDD **96** (1996) 226–231.
+15. V. Satopää, J. Albrecht, D. Irwin, B. Raghavan. *Finding a "Kneedle" in a haystack: detecting knee points in system behavior.* Proc. ICDCS Workshops (2011) 166–171.
 
 ---
 
