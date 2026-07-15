@@ -10,11 +10,21 @@ all, and if so how many groups the evidence supports. It answers three
 questions that the elbow/consensus selector silently papers over:
 
   1. STRUCTURE vs NOISE.  Compare the best achievable silhouette on the real
-     features against a null built by independently shuffling each feature
-     column (destroys joint cluster structure, preserves every marginal). If
-     the real silhouette is not clearly above the null band, the features are
-     consistent with a single blob — e.g. a near-synchronized regime — and the
-     attractor count is simply *not resolved* by VPS. No clusterer can fix that.
+     features against a null band measured on a structureless reference cloud
+     (uniform over the PCA bounding box — the gap-statistic reference). The
+     verdict is driven by EFFECT SIZE, not a bare inequality. Only BALANCED
+     partitions count: a split whose smallest cluster is a handful of points
+     isolates outliers and scores a meaningless ~0.95. If the real optimum does
+     not clear the null by --margin, the features are consistent with a single
+     blob — e.g. a near-synchronized regime — and the attractor count is simply
+     *not resolved* by VPS. No clusterer can fix that.
+
+     History: the original test used a column-shuffle null and no balance check.
+     Shuffling preserves each marginal, so on outlier-heavy features k-means
+     scored ~0.95 by splitting outliers off the REAL and the SHUFFLED data
+     alike; the null inflated to 0.94 and STRUCTURED was declared on margins of
+     0.018. Winsorising + robust scaling, the balance filter, and the uniform
+     reference each remove one leg of that failure.
 
   2. HOW MANY, assumption-light.  The spectral eigengap of an RBF affinity
      graph (median-bandwidth) estimates the group count from the Laplacian
@@ -51,7 +61,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import pairwise_distances, silhouette_score
 from sklearn.mixture import GaussianMixture
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 
 _K_FROM_DIR = re.compile(r"_K(-?\d+\.?\d*)")
 
@@ -77,47 +87,108 @@ def _load(npz_path: Path):
     return vectors, cfg
 
 
-def _preprocess(vectors: np.ndarray, pca_dim: int, rng) -> np.ndarray:
-    """z-score then PCA-reduce, matching the selector's front end."""
-    Xs = StandardScaler().fit_transform(vectors)
+def _preprocess(vectors: np.ndarray, pca_dim: int, winsor: float = 0.005) -> np.ndarray:
+    """
+    Winsorise, robust-scale, then PCA-reduce.
+
+    The original z-score + PCA front end let a handful of extreme ICs dominate
+    the components. k-means then maximises silhouette by splitting those
+    outliers off — scoring ~0.95 on REAL and SHUFFLED data alike, which is what
+    inflated the null band to 0.94 and made the STRUCTURED verdict meaningless.
+    Clipping the tails and scaling by the median/IQR removes that leverage.
+    """
+    X = np.asarray(vectors, dtype=np.float64)
+    if winsor > 0:
+        lo = np.quantile(X, winsor, axis=0)
+        hi = np.quantile(X, 1.0 - winsor, axis=0)
+        X = np.clip(X, lo, hi)
+    Xs = RobustScaler().fit_transform(X)
+    # Constant (zero-IQR) columns become 0 and carry no information; drop them
+    # so PCA is not fed dead dimensions.
+    keep = Xs.std(axis=0) > 1e-12
+    if keep.any():
+        Xs = Xs[:, keep]
     if Xs.shape[1] > pca_dim:
         Xs = PCA(n_components=pca_dim, random_state=0).fit_transform(Xs)
     return Xs
 
 
-def _sweep_k(Xs: np.ndarray, k_max: int, rng):
-    """Inertia, silhouette value, and BIC across k (k=1 inertia = total SS)."""
+def _fit_k(mat: np.ndarray, k: int):
+    """Cluster at k; return (labels, silhouette, smallest-cluster fraction)."""
+    lab = KMeans(n_clusters=int(k), n_init=5, random_state=0).fit_predict(mat)
+    if np.unique(lab).size < 2:
+        return None, -1.0, 0.0
+    counts = np.bincount(lab, minlength=int(k))
+    min_frac = float(counts[counts > 0].min()) / len(lab)
+    return lab, float(silhouette_score(mat, lab)), min_frac
+
+
+def _best_balanced_sil(mat: np.ndarray, k_values, min_cluster_frac: float):
+    """
+    Best silhouette over k, considering only BALANCED partitions.
+
+    A partition whose smallest cluster is a handful of points is an outlier
+    split, not a basin: it scores a near-perfect silhouette while telling us
+    nothing. Requiring every cluster to hold at least `min_cluster_frac` of the
+    points is what makes the silhouette mean "there are real groups here".
+    """
+    best_sil, best_k, best_frac = -1.0, None, 0.0
+    for k in k_values:
+        lab, sil, frac = _fit_k(mat, int(k))
+        if lab is None or frac < min_cluster_frac:
+            continue
+        if sil > best_sil:
+            best_sil, best_k, best_frac = sil, int(k), frac
+    return best_sil, best_k, best_frac
+
+
+def _sweep_k(Xs: np.ndarray, k_max: int, min_cluster_frac: float):
+    """Inertia, silhouette, BIC and smallest-cluster fraction across k."""
     k1 = KMeans(n_clusters=1, n_init=1, random_state=0).fit(Xs)
     ks = list(range(2, k_max + 1))
-    inertia, silh, bic = [float(k1.inertia_)], [np.nan], [np.nan]
+    inertia, silh, bic, fracs = [float(k1.inertia_)], [np.nan], [np.nan], [1.0]
     for k in ks:
         km = KMeans(n_clusters=k, n_init=10, random_state=0).fit(Xs)
         inertia.append(float(km.inertia_))
         lab = km.labels_
-        silh.append(float(silhouette_score(Xs, lab)) if np.unique(lab).size > 1 else -1.0)
+        if np.unique(lab).size > 1:
+            silh.append(float(silhouette_score(Xs, lab)))
+            counts = np.bincount(lab, minlength=k)
+            fracs.append(float(counts[counts > 0].min()) / len(lab))
+        else:
+            silh.append(-1.0)
+            fracs.append(0.0)
         gmm = GaussianMixture(n_components=k, covariance_type="full",
                               reg_covar=1e-4, random_state=0).fit(Xs)
         bic.append(float(gmm.bic(Xs)))
-    return np.array([1] + ks), np.array(inertia), np.array(silh), np.array(bic)
+    return (np.array([1] + ks), np.array(inertia), np.array(silh),
+            np.array(bic), np.array(fracs))
 
 
-def _best_silhouette(Xs: np.ndarray, k_max: int) -> float:
-    best = -1.0
-    for k in range(2, k_max + 1):
-        lab = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(Xs)
-        if np.unique(lab).size > 1:
-            best = max(best, float(silhouette_score(Xs, lab)))
-    return best
+def _reference(Xs: np.ndarray, rng, kind: str) -> np.ndarray:
+    """
+    A featureless reference cloud with no cluster structure.
+
+    'uniform' draws points uniformly over the PCA bounding box (the Tibshirani
+    gap-statistic reference). Unlike a column shuffle it does NOT inherit the
+    real marginals, so heavy tails cannot smuggle a high null silhouette back in.
+    """
+    if kind == "uniform":
+        return rng.uniform(Xs.min(axis=0), Xs.max(axis=0), size=Xs.shape)
+    Z = Xs.copy()                                   # 'shuffle' (legacy)
+    for j in range(Z.shape[1]):
+        Z[:, j] = Z[rng.permutation(Z.shape[0]), j]
+    return Z
 
 
-def _null_band(Xs: np.ndarray, k_max: int, reps: int, rng):
-    """Best silhouette over k on column-shuffled copies (no joint structure)."""
+def _null_band(Xs: np.ndarray, k_values, reps: int, rng,
+               min_cluster_frac: float, kind: str):
+    """Best BALANCED silhouette achievable on a structureless reference."""
     out = np.empty(reps)
     for r in range(reps):
-        Z = np.empty_like(Xs)
-        for j in range(Xs.shape[1]):
-            Z[:, j] = Xs[rng.permutation(Xs.shape[0]), j]
-        out[r] = _best_silhouette(Z, k_max)
+        s, _, _ = _best_balanced_sil(_reference(Xs, rng, kind), k_values,
+                                     min_cluster_frac)
+        out[r] = s
     return out
 
 
@@ -147,43 +218,57 @@ def _eigengap(Xs: np.ndarray, k_max: int, rng, n_nbr: int = 7) -> tuple[int, np.
 
 
 def diagnose(npz_path: Path, k_max: int, n_sub: int, n_eig: int,
-             null_reps: int, rng) -> dict:
+             null_reps: int, rng, min_cluster_frac: float = 0.05,
+             margin: float = 0.05, null_kind: str = "uniform") -> dict:
     vectors, cfg = _load(npz_path)
     coupling = _coupling_of(npz_path, cfg)
-    Xs_full = _preprocess(vectors, pca_dim=10, rng=rng)
 
-    n = Xs_full.shape[0]
+    # Subsample the RAW vectors before preprocessing: the full matrix is
+    # 130321 x 6806, and winsorising/scaling it in float64 costs ~7 GB for no
+    # gain — the subsample estimates the same geometry.
+    n = vectors.shape[0]
     sub = rng.choice(n, size=min(n_sub, n), replace=False)
-    Xs = Xs_full[sub]
+    Xs = _preprocess(vectors[sub], pca_dim=10)
+    del vectors
     eig_idx = rng.choice(Xs.shape[0], size=min(n_eig, Xs.shape[0]), replace=False)
 
-    k_values, inertia, silh, bic = _sweep_k(Xs, k_max, rng)
-    real_best = float(np.nanmax(silh))
-    k_silhouette = int(k_values[1:][int(np.nanargmax(silh[1:]))])
-    null = _null_band(Xs, k_max, null_reps, rng)
+    k_values, inertia, silh, bic, fracs = _sweep_k(Xs, k_max, min_cluster_frac)
+    ks = k_values[1:]
+    real_best, k_silhouette, best_frac = _best_balanced_sil(Xs, ks, min_cluster_frac)
+    null = _null_band(Xs, ks, null_reps, rng, min_cluster_frac, null_kind)
     null_mean, null_p95 = float(null.mean()), float(np.percentile(null, 95))
     k_gap, evals = _eigengap(Xs[eig_idx], k_max, rng)
 
-    # Verdict: structure only if the real optimum clears the null band AND the
-    # silhouette is not itself vanishingly weak.
-    structured = (real_best > null_p95) and (real_best >= 0.10)
-    if not structured:
-        verdict = ("NO SEPARABLE STRUCTURE — consistent with a single blob "
-                   "(near-sync / degenerate). Attractor count NOT resolved by VPS.")
-        k_supported = 1
+    # Verdict is driven by EFFECT SIZE, not a bare inequality: the old test
+    # declared STRUCTURED on margins as thin as 0.018 between two ~0.94 numbers.
+    effect = real_best - null_p95
+    if k_silhouette is None:
+        structured, k_supported = False, 1
+        verdict = ("NO SEPARABLE STRUCTURE — every partition is an outlier split "
+                   f"(no cluster holds >= {min_cluster_frac:.0%} of points). "
+                   "Attractor count NOT resolved by VPS.")
+    elif effect < margin:
+        structured, k_supported = False, 1
+        verdict = (f"NO SEPARABLE STRUCTURE — effect size {effect:+.3f} < "
+                   f"{margin:.3f} (real {real_best:.3f} vs null p95 {null_p95:.3f}); "
+                   "consistent with a single blob. Attractor count NOT resolved.")
     else:
+        structured, k_supported = True, int(k_silhouette)
         agree = (k_silhouette == k_gap)
-        verdict = (f"STRUCTURED — silhouette k={k_silhouette}, eigengap k={k_gap} "
+        verdict = (f"STRUCTURED — effect {effect:+.3f}, silhouette k={k_silhouette} "
+                   f"(smallest cluster {best_frac:.1%}), eigengap k={k_gap} "
                    f"({'agree' if agree else 'DISAGREE → needs convergence check'}).")
-        k_supported = k_silhouette
 
     return dict(
         npz=str(npz_path), coupling=coupling, n_ics=int(n),
-        real_best_silhouette=real_best, null_mean_silhouette=null_mean,
-        null_p95_silhouette=null_p95, k_silhouette=k_silhouette,
+        real_best_silhouette=float(real_best), null_mean_silhouette=null_mean,
+        null_p95_silhouette=null_p95, effect_size=float(effect),
+        min_cluster_fraction=float(best_frac),
+        k_silhouette=(0 if k_silhouette is None else int(k_silhouette)),
         k_eigengap=k_gap, k_supported=k_supported, structured=bool(structured),
-        verdict=verdict,
-        _curves=dict(k=k_values, inertia=inertia, silh=silh, bic=bic, evals=evals),
+        null_kind=null_kind, verdict=verdict,
+        _curves=dict(k=k_values, inertia=inertia, silh=silh, bic=bic,
+                     evals=evals, fracs=fracs),
     )
 
 
@@ -249,6 +334,18 @@ def main(argv=None) -> int:
     ap.add_argument("--n-eig", type=int, default=1500,
                     help="landmarks for the spectral eigengap (O(m^2) memory)")
     ap.add_argument("--null-reps", type=int, default=20)
+    ap.add_argument("--min-cluster-frac", type=float, default=0.05,
+                    help="reject a partition whose smallest cluster holds less "
+                         "than this fraction of points — such a split isolates "
+                         "outliers and scores a meaningless ~0.95 silhouette")
+    ap.add_argument("--margin", type=float, default=0.05,
+                    help="required effect size (real silhouette minus null p95) "
+                         "to call a slice STRUCTURED")
+    ap.add_argument("--null-kind", default="uniform", choices=["uniform", "shuffle"],
+                    help="reference cloud for the null band. 'uniform' = PCA "
+                         "bounding box (gap-statistic reference). 'shuffle' is "
+                         "the legacy column shuffle, which inherits the real "
+                         "marginals and is inflated by outliers.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--csv", default=None)
     ap.add_argument("--no-plot", action="store_true",
@@ -272,7 +369,9 @@ def main(argv=None) -> int:
     for npz_path in sources:
         try:
             rec = diagnose(npz_path, args.k_max, args.n_sub, args.n_eig,
-                           args.null_reps, rng)
+                           args.null_reps, rng,
+                           min_cluster_frac=args.min_cluster_frac,
+                           margin=args.margin, null_kind=args.null_kind)
         except KeyError as exc:
             print(f"  [skip]  {npz_path}: {exc}")
             continue
@@ -282,6 +381,8 @@ def main(argv=None) -> int:
         K = f"{rec['coupling']:.4f}" if rec["coupling"] is not None else "  ?   "
         print(f"[K={K}]  sil_real={rec['real_best_silhouette']:.3f}  "
               f"null_p95={rec['null_p95_silhouette']:.3f}  "
+              f"effect={rec['effect_size']:+.3f}  "
+              f"min_clu={rec['min_cluster_fraction']:.1%}  "
               f"k_sil={rec['k_silhouette']}  k_gap={rec['k_eigengap']}  "
               f"-> k_supported={rec['k_supported']}\n"
               f"          {rec['verdict']}")
