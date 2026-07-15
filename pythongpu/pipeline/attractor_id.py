@@ -176,6 +176,28 @@ def _report(res: dict) -> None:
           f"radius_scan={res['radius_scan']}  [{flag}]")
 
 
+def _write_rows(results: list[dict], csv_path: Path, extra: dict | None = None) -> None:
+    """
+    Flatten result dicts to a CSV, dropping the bulky per-point arrays
+    (`labels`, `counts`) that belong in memory, not a table.
+    """
+    import csv as _csv
+    rows = []
+    for res in results:
+        row = {k: v for k, v in res.items() if k not in ("labels", "counts")}
+        row["radius_scan"] = ";".join(f"{s}:{n}" for s, n in
+                                      sorted(res["radius_scan"].items()))
+        if extra:
+            row.update(extra)
+        rows.append(row)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(csv_path, "w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    print(f"[csv]      {len(rows)} row(s) -> {csv_path}")
+
+
 def _discover(root, npz_globs):
     paths = []
     if root:
@@ -212,6 +234,9 @@ def main(argv=None) -> int:
     ap.add_argument("--min-samples", type=int, default=10)
     ap.add_argument("--n-sub", type=int, default=8000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--csv", default=None,
+                    help="write the result row(s) here. Without this an array "
+                         "job's results live only in its stdout log.")
     args = ap.parse_args(argv)
 
     rng = np.random.default_rng(args.seed)
@@ -222,6 +247,10 @@ def main(argv=None) -> int:
             args.t_transient, args.record_stride, args.node_x, args.node_y,
             args.min_samples, args.dti_path)
         _report(res)
+        if args.csv:
+            _write_rows([res], Path(args.csv),
+                        extra=dict(grid_n=args.grid_n, tmax=args.tmax,
+                                   t_transient=args.t_transient))
         return 0
 
     if not args.root and not args.npz:
@@ -230,6 +259,7 @@ def main(argv=None) -> int:
     if not sources:
         ap.error("no basin_data.npz found")
     ok = False
+    rows: list[dict] = []
     for npz_path in sources:
         try:
             res = count_from_npz(npz_path, args.n_sub, args.min_samples, rng)
@@ -237,7 +267,10 @@ def main(argv=None) -> int:
             print(f"  [skip]  {npz_path}: {exc}")
             continue
         _report(res)
+        rows.append(res)
         ok = True
+    if ok and args.csv:
+        _write_rows(rows, Path(args.csv))
     return 0 if ok else 1
 
 
