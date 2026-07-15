@@ -211,6 +211,17 @@ def _plot(rec: dict, out_png: Path) -> None:
     plt.close(fig)
 
 
+def _write_csv(rows: list[dict], csv_path) -> None:
+    """Rewrite the summary CSV from scratch; called after every file so a late
+    failure (or a Ctrl-C) never discards verdicts already computed."""
+    if not rows:
+        return
+    with open(csv_path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+
+
 def _discover(root, npz_globs):
     paths = []
     if root:
@@ -240,6 +251,11 @@ def main(argv=None) -> int:
     ap.add_argument("--null-reps", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--csv", default=None)
+    ap.add_argument("--no-plot", action="store_true",
+                    help="skip the diagnostics PNGs entirely (verdicts and CSV "
+                         "are still produced). Useful where matplotlib's imaging "
+                         "stack is unavailable — e.g. a login node without "
+                         "libjpeg-turbo loaded.")
     args = ap.parse_args(argv)
 
     if not args.root and not args.npz:
@@ -260,22 +276,28 @@ def main(argv=None) -> int:
         except KeyError as exc:
             print(f"  [skip]  {npz_path}: {exc}")
             continue
-        png = npz_path.with_name(npz_path.stem + "_vps_diag.png")
-        _plot(rec, png)
+        # Print the verdict BEFORE plotting: the science must never be lost to a
+        # cosmetic failure. (A missing libjpeg made matplotlib's import explode
+        # mid-loop and threw away every computed verdict.)
         K = f"{rec['coupling']:.4f}" if rec["coupling"] is not None else "  ?   "
         print(f"[K={K}]  sil_real={rec['real_best_silhouette']:.3f}  "
               f"null_p95={rec['null_p95_silhouette']:.3f}  "
               f"k_sil={rec['k_silhouette']}  k_gap={rec['k_eigengap']}  "
               f"-> k_supported={rec['k_supported']}\n"
-              f"          {rec['verdict']}  [{png.name}]")
+              f"          {rec['verdict']}")
+        if not args.no_plot:
+            png = npz_path.with_name(npz_path.stem + "_vps_diag.png")
+            try:
+                _plot(rec, png)
+                print(f"          [{png.name}]")
+            except Exception as exc:  # plotting is optional, never fatal
+                print(f"          [plot skipped: {type(exc).__name__}: {exc}]")
         rec.pop("_curves")
         rows.append(rec)
+        # Flush the CSV as we go so a late failure cannot discard earlier work.
+        _write_csv(rows, csv_path)
 
     if rows:
-        with open(csv_path, "w", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-            w.writeheader()
-            w.writerows(rows)
         print(f"[csv]  {len(rows)} rows -> {csv_path}")
     return 0 if rows else 1
 

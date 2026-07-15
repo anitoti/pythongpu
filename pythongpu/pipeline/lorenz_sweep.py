@@ -75,6 +75,9 @@ from tqdm import tqdm
 
 from pythongpu.utils import get_plot_path
 from pythongpu.networks.static_adjacency import load_dti_laplacian, rewire_edges
+from pythongpu.networks.random_graphs import (
+    generate_ba_graph, generate_gnm_laplacian, generate_ws_graph,
+)
 from pythongpu.processing.box_counting import boxcount_2d_gpu, fractal_dimension, boxdiv2, extract_boundary
 from pythongpu.processing.basin_clustering import select_optimal_clusters, plot_selection
 
@@ -441,6 +444,26 @@ def main():
     ap.add_argument("--cluster-criterion", default="consensus",
         choices=["consensus", "elbow", "bic", "silhouette"],
         help="Model-selection criterion that sets K when --k-clusters=auto.")
+    ap.add_argument("--graph", default="dti",
+        choices=["dti", "er", "ba", "ws"],
+        help="Network substrate: 'dti' (default, the empirical connectome) or a "
+             "null model with the same node count — 'er' (Erdos-Renyi G(n,m), "
+             "edge count matched to DTI by default), 'ba' (Barabasi-Albert "
+             "scale-free), 'ws' (Watts-Strogatz small-world). Use these to test "
+             "whether fractal basins come from brain wiring or from any "
+             "comparable graph.")
+    ap.add_argument("--graph-n", type=int, default=None,
+        help="Node count for the null model (default: match the DTI matrix).")
+    ap.add_argument("--graph-seed", type=int, default=None,
+        help="Seed for null-model graph generation (set it for reproducibility).")
+    ap.add_argument("--ba-m", type=int, default=5,
+        help="Barabasi-Albert: edges attached per new node (--graph ba).")
+    ap.add_argument("--er-m", type=int, default=None,
+        help="Erdos-Renyi: total edges (--graph er; default: DTI's edge count).")
+    ap.add_argument("--ws-k", type=int, default=10,
+        help="Watts-Strogatz: neighbours per node, must be even (--graph ws).")
+    ap.add_argument("--ws-p", type=float, default=0.1,
+        help="Watts-Strogatz: rewiring probability (--graph ws).")
     ap.add_argument("--null-reps",  type=int,   default=0,
         help="With --k-clusters=auto, run a structure-vs-noise guard with this "
              "many column-shuffle null reps; if the features carry no separable "
@@ -470,6 +493,42 @@ def main():
     #   L = diag(sum(A,2)) - A; gel = 0.5;
     #   H = [0 0 0; 0 1 0; 0 0 0]; gelLH = gel*kron(L,H)"]
     L_gpu, n_dti = load_dti_laplacian(args.dti_path, device)
+
+    # ── null-model substitution ──────────────────────────────────────────
+    # Swap the empirical connectome for a synthetic graph of the SAME node
+    # count, so any change in basin structure is attributable to topology
+    # alone rather than to network size. This is what answers "is fractality
+    # a property of brain wiring, or of any comparably dense graph?".
+    if args.graph != "dti":
+        n_null = args.graph_n if args.graph_n else n_dti
+        seed = args.graph_seed
+        # Edge count of the empirical connectome (L = D - A, so the off-diagonal
+        # non-zeros are the edges, counted twice for an undirected graph).
+        _Lnp = L_gpu.detach().cpu().numpy()
+        _A = np.diag(np.diag(_Lnp)) - _Lnp
+        np.fill_diagonal(_A, 0.0)
+        dti_edges = int((np.abs(_A) > 0).sum() // 2)
+        if args.graph == "ba":
+            # m = edges attached per new node; total edges ~ m*(n-m).
+            L_gpu = generate_ba_graph(n_null, args.ba_m, device=device,
+                                      plot=False, seed=seed)
+            desc = f"Barabasi-Albert  n={n_null}  m={args.ba_m}"
+        elif args.graph == "er":
+            # Match the empirical edge count by default so density is comparable
+            # and only the topology differs.
+            m_edges = args.er_m if args.er_m else dti_edges
+            L_gpu = generate_gnm_laplacian(n_null, m_edges, device=device,
+                                           plot=False, seed=seed)
+            desc = f"Erdos-Renyi G(n,m)  n={n_null}  m={m_edges} (DTI has {dti_edges})"
+        elif args.graph == "ws":
+            L_gpu = generate_ws_graph(n_null, args.ws_k, args.ws_p,
+                                      device=device, plot=False, seed=seed)
+            desc = f"Watts-Strogatz  n={n_null}  k={args.ws_k}  p={args.ws_p}"
+        else:
+            raise ValueError(f"unknown --graph {args.graph!r}")
+        L_gpu = L_gpu.to(device=device, dtype=torch.float32)
+        n_dti = n_null
+        print(f"[graph]    NULL MODEL: {desc}  (seed={seed}) — DTI_A replaced")
 
     # ── params — n_osc set from actual matrix size ───────────────────────
     p = LorenzParams(
@@ -696,6 +755,8 @@ def main():
         grid_n       = int(m),
         k_clusters   = int(k_used),
         structured   = bool(structured),
+        graph        = str(args.graph),        # 'dti' | 'er' | 'ba' | 'ws'
+        graph_seed   = args.graph_seed,
         grid_lo      = -9.0,
         grid_hi      = 9.0,
         sigma        = float(p.sigma),

@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import re
 import sys
 from pathlib import Path
@@ -183,6 +184,25 @@ def read_fractal_dim(npz) -> float:
     return float("nan")
 
 
+def compute_basin_entropy(labels: np.ndarray, eps: int) -> dict:
+    """
+    Boundary basin entropy S_bb via the Daza box covering, reusing the
+    implementation in universality_sweep so the two tools cannot drift apart.
+
+    NOTE the two criteria answer DIFFERENT questions and are reported side by
+    side rather than conflated:
+      * dilation test  -> strict_fraction ~ 1  : the boundary is Wada (every
+        boundary point borders every basin). Strictly stronger.
+      * S_bb > ln 2    -> wada_suspect        : a SUFFICIENT condition for a
+        FRACTAL boundary. It does not by itself establish Wada.
+    A slice can satisfy S_bb > ln 2 and not be Wada.
+    """
+    # Imported lazily: universality_sweep pulls in torch, which we do not want
+    # to require for a pure-numpy label analysis unless the user asks for it.
+    from pythongpu.pipeline.universality_sweep import basin_entropy
+    return basin_entropy(labels, eps)
+
+
 def load_record(path: Path, index: int, args) -> dict | None:
     """Load one basin_data npz and run the Daza test. Only touches small keys
     (never the multi-GB `vectors` array, thanks to npz lazy loading)."""
@@ -193,6 +213,7 @@ def load_record(path: Path, index: int, args) -> dict | None:
     labels = np.asarray(npz["labels"])
     K, prov = extract_K(npz, path, index)
     res = daza_wada(labels, args.background, args.radius)
+    ent = compute_basin_entropy(labels, args.entropy_eps)
 
     # state-space extent for the basin map, if the IC grid is stored
     extent = None
@@ -205,6 +226,10 @@ def load_record(path: Path, index: int, args) -> dict | None:
     rec.update(
         path=path, stem=path.stem, K=K, K_provenance=prov,
         labels=labels, extent=extent, D_f=read_fractal_dim(npz),
+        S_b=ent["S_b"], S_bb=ent["S_bb"],
+        entropy_fractal=ent["wada_suspect"],       # S_bb > ln 2
+        entropy_boundary_fraction=ent["boundary_fraction"],
+        n_entropy_boxes=ent["n_boxes"],
     )
     return rec
 
@@ -302,6 +327,9 @@ def main(argv=None):
                     help="basin-label sentinel for masked/background cells")
     ap.add_argument("--wada-thresh", type=float, default=0.95,
                     help="strict-coverage fraction above which a slice is flagged Wada")
+    ap.add_argument("--entropy-eps", type=int, default=5,
+                    help="box side (px) for the Daza basin-entropy covering used "
+                         "to evaluate the S_bb > ln 2 fractal-boundary criterion")
     ap.add_argument("--dpi", type=int, default=150)
     args = ap.parse_args(argv)
 
@@ -323,7 +351,10 @@ def main(argv=None):
               f"basins={rec['n_basins']} "
               f"wada={rec['wada_fraction']*100:5.1f}% "
               f"strict={rec['strict_fraction']*100:5.1f}% "
-              f"D_f={rec['D_f']:.3f}")
+              f"D_f={rec['D_f']:.3f}  "
+              f"S_bb={rec['S_bb']:.3f}"
+              f"{' >ln2 FRACTAL' if rec['entropy_fractal'] else '  <=ln2'}"
+              f"  [{'WADA' if rec['strict_fraction'] >= args.wada_thresh else 'not-Wada'}]")
 
     if not records:
         sys.exit("[analyze_wada] no usable basin maps (no 'labels' arrays).")
@@ -349,18 +380,48 @@ def main(argv=None):
         w = csv.writer(fh)
         w.writerow(["file", "K", "K_provenance", "n_basins", "n_boundary_px",
                     "n_wada_px", "wada_fraction", "strict_fraction", "D_f",
-                    "is_wada"])
+                    "is_wada", "S_b", "S_bb", "S_bb_gt_ln2", "agree"])
         for r in records:
+            is_wada = int(r["strict_fraction"] >= args.wada_thresh)
+            sbb_frac = int(r["entropy_fractal"])
             w.writerow([r["stem"], f"{r['K']:g}", r["K_provenance"], r["n_basins"],
                         r["n_boundary_px"], r["n_wada_px"],
                         f"{r['wada_fraction']:.6f}", f"{r['strict_fraction']:.6f}",
-                        f"{r['D_f']:.6f}",
-                        int(r["strict_fraction"] >= args.wada_thresh)])
+                        f"{r['D_f']:.6f}", is_wada,
+                        f"{r['S_b']:.6f}", f"{r['S_bb']:.6f}", sbb_frac,
+                        # Wada implies a fractal boundary, so a Wada slice that
+                        # fails S_bb > ln 2 is an inconsistency worth inspecting.
+                        int(not (is_wada and not sbb_frac))])
     np.savez(out_dir / "wada_summary.npz",
              K=Ks, wada_fraction=fracs, strict_fraction=strict, D_f=Dfs,
+             S_b=np.array([r["S_b"] for r in records], float),
+             S_bb=np.array([r["S_bb"] for r in records], float),
+             S_bb_gt_ln2=np.array([r["entropy_fractal"] for r in records], bool),
              n_basins=np.array([r["n_basins"] for r in records]),
              files=np.array([r["stem"] for r in records]))
     print(f"  wrote {csv_path.name}, wada_summary.npz")
+
+    # ── cross-check the two criteria ────────────────────────────────────────
+    ln2 = math.log(2.0)
+    wada_hits = [r for r in records if r["strict_fraction"] >= args.wada_thresh]
+    sbb_hits = [r for r in records if r["entropy_fractal"]]
+
+    def _klist(rs):
+        return ", ".join(format(r["K"], "g") for r in rs) or "none"
+
+    print(f"\n[criteria]  ln 2 = {ln2:.4f}   (entropy box eps = {args.entropy_eps} px)")
+    print(f"[criteria]  S_bb > ln 2 (fractal boundary) : "
+          f"{len(sbb_hits)}/{len(records)} slices   K = {_klist(sbb_hits)}")
+    print(f"[criteria]  strict Wada (>= {args.wada_thresh:.2f})       : "
+          f"{len(wada_hits)}/{len(records)} slices   K = {_klist(wada_hits)}")
+    # Wada is strictly stronger than fractality: Wada without S_bb > ln 2 is a
+    # contradiction and almost always means one of the tests is misconfigured.
+    bad = [r for r in wada_hits if not r["entropy_fractal"]]
+    if bad:
+        print(f"[criteria]  INCONSISTENT: {len(bad)} slice(s) flagged Wada but "
+              f"failing S_bb > ln 2 — inspect K = {_klist(bad)}")
+    else:
+        print("[criteria]  consistent: every Wada slice also satisfies S_bb > ln 2.")
     print(f"[analyze_wada] done → {out_dir}")
 
 
