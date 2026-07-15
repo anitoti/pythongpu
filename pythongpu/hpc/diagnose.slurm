@@ -28,7 +28,10 @@
 #
 #  Results: <root>/vps_diagnostics.csv  and the job log under logs/.
 #SBATCH --job-name=vps-diagnose
-#SBATCH --partition=dev
+# 'general': 7-day limit, many CPU nodes. Deliberately NOT 'gpu' — this job is
+# CPU-only (sklearn/numpy) and the cluster has a single GPU node, which must stay
+# free for the integration sweeps. ('dev' caps at 15 minutes: validation only.)
+#SBATCH --partition=general
 #SBATCH --output=logs/diagnose_%j.out
 #SBATCH --error=logs/diagnose_%j.err
 #SBATCH --ntasks=1
