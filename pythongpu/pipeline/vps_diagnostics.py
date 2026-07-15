@@ -169,10 +169,25 @@ def _reference(Xs: np.ndarray, rng, kind: str) -> np.ndarray:
     """
     A featureless reference cloud with no cluster structure.
 
-    'uniform' draws points uniformly over the PCA bounding box (the Tibshirani
-    gap-statistic reference). Unlike a column shuffle it does NOT inherit the
-    real marginals, so heavy tails cannot smuggle a high null silhouette back in.
+    'gaussian' (default) draws from a single multivariate normal matched to the
+    data's mean and covariance. This is the right null for the question actually
+    being asked — "one blob, or several?" — because it is unimodal BY
+    CONSTRUCTION yet reproduces the real elliptical spread. Splitting a unimodal
+    elliptical cloud in half already earns a decent silhouette, so a genuine
+    multi-basin structure must beat THAT, not merely beat a uniform box.
+
+    'uniform' draws over the PCA bounding box (Tibshirani gap-statistic
+    reference). Shape-mismatched: a box is easier to beat than an ellipsoid, so
+    a heavy-tailed unimodal blob can clear it and register a false positive.
+
+    'shuffle' (legacy) permutes each column. It inherits the real marginals, so
+    on outlier-heavy features it inflates to ~0.94 and destroys the test.
     """
+    if kind == "gaussian":
+        mu = Xs.mean(axis=0)
+        C = np.cov(Xs, rowvar=False)
+        C = np.atleast_2d(C) + 1e-9 * np.eye(Xs.shape[1])   # keep it PSD
+        return rng.multivariate_normal(mu, C, size=Xs.shape[0])
     if kind == "uniform":
         return rng.uniform(Xs.min(axis=0), Xs.max(axis=0), size=Xs.shape)
     Z = Xs.copy()                                   # 'shuffle' (legacy)
@@ -219,7 +234,7 @@ def _eigengap(Xs: np.ndarray, k_max: int, rng, n_nbr: int = 7) -> tuple[int, np.
 
 def diagnose(npz_path: Path, k_max: int, n_sub: int, n_eig: int,
              null_reps: int, rng, min_cluster_frac: float = 0.05,
-             margin: float = 0.05, null_kind: str = "uniform") -> dict:
+             margin: float = 0.15, null_kind: str = "gaussian") -> dict:
     vectors, cfg = _load(npz_path)
     coupling = _coupling_of(npz_path, cfg)
 
@@ -338,14 +353,24 @@ def main(argv=None) -> int:
                     help="reject a partition whose smallest cluster holds less "
                          "than this fraction of points — such a split isolates "
                          "outliers and scores a meaningless ~0.95 silhouette")
-    ap.add_argument("--margin", type=float, default=0.05,
+    ap.add_argument("--margin", type=float, default=0.15,
                     help="required effect size (real silhouette minus null p95) "
-                         "to call a slice STRUCTURED")
-    ap.add_argument("--null-kind", default="uniform", choices=["uniform", "shuffle"],
-                    help="reference cloud for the null band. 'uniform' = PCA "
-                         "bounding box (gap-statistic reference). 'shuffle' is "
-                         "the legacy column shuffle, which inherits the real "
-                         "marginals and is inflated by outliers.")
+                         "to call a slice STRUCTURED. Default 0.15 because the "
+                         "raw statistic's seed-to-seed scatter on heavy-tailed "
+                         "features is ~0.1: on one fixed configuration the real "
+                         "silhouette moved 0.172 -> 0.076 on the RNG draw alone, "
+                         "so a 0.05 margin sat inside the noise and could be "
+                         "crossed by reseeding. A calibrated null puts genuine "
+                         "structure at effect ~ +0.4, far above this floor.")
+    ap.add_argument("--null-kind", default="gaussian",
+                    choices=["gaussian", "uniform", "shuffle"],
+                    help="reference cloud for the null band. 'gaussian' "
+                         "(default) = a single covariance-matched normal: "
+                         "unimodal by construction, so real structure must beat "
+                         "a one-blob ellipsoid. 'uniform' = PCA bounding box "
+                         "(shape-mismatched; a heavy-tailed blob can clear it). "
+                         "'shuffle' = legacy column shuffle, inflated by "
+                         "outliers to ~0.94 — do not use.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--csv", default=None)
     ap.add_argument("--no-plot", action="store_true",
