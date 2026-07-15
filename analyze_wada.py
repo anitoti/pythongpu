@@ -215,6 +215,26 @@ def load_record(path: Path, index: int, args) -> dict | None:
     res = daza_wada(labels, args.background, args.radius)
     ent = compute_basin_entropy(labels, args.entropy_eps)
 
+    # ── trust gates ─────────────────────────────────────────────────────────
+    # (1) Degeneracy, label-only and free. If essentially EVERY occupied box is
+    #     a boundary box, the labelling is salt-and-pepper: the "boundary" fills
+    #     the slice, S_b collapses onto S_bb, D_f -> 2, and S_bb > ln 2 fires for
+    #     a partition of noise. Such a slice reports a spectacular false positive
+    #     unless it is quarantined.
+    degenerate = ent["boundary_fraction"] >= args.trust_boundary_frac
+    # (2) Full VPS structure gate (opt-in: needs the multi-GB `vectors`).
+    structured = None
+    if args.gate:
+        from pythongpu.pipeline.vps_diagnostics import diagnose
+        try:
+            d = diagnose(path, args.gate_k_max, args.gate_n_sub,
+                         args.gate_n_eig, args.gate_null_reps,
+                         np.random.default_rng(0))
+            structured = bool(d["structured"])
+        except KeyError:
+            structured = None      # npz predates feature persistence
+    trusted = (not degenerate) and (structured is not False)
+
     # state-space extent for the basin map, if the IC grid is stored
     extent = None
     if "Xg" in npz.files and "Yg" in npz.files:
@@ -230,6 +250,7 @@ def load_record(path: Path, index: int, args) -> dict | None:
         entropy_fractal=ent["wada_suspect"],       # S_bb > ln 2
         entropy_boundary_fraction=ent["boundary_fraction"],
         n_entropy_boxes=ent["n_boxes"],
+        degenerate=degenerate, structured=structured, trusted=trusted,
     )
     return rec
 
@@ -330,6 +351,20 @@ def main(argv=None):
     ap.add_argument("--entropy-eps", type=int, default=5,
                     help="box side (px) for the Daza basin-entropy covering used "
                          "to evaluate the S_bb > ln 2 fractal-boundary criterion")
+    ap.add_argument("--trust-boundary-frac", type=float, default=0.95,
+                    help="quarantine a slice as degenerate when at least this "
+                         "fraction of occupied boxes are boundary boxes — i.e. "
+                         "salt-and-pepper labels, for which S_bb > ln 2 and "
+                         "D_f -> 2 are artifacts, not geometry")
+    ap.add_argument("--gate", action="store_true",
+                    help="additionally run the full VPS structure gate on each "
+                         "slice's saved `vectors` (null test); slices with no "
+                         "separable structure are quarantined. Costs a multi-GB "
+                         "load per file.")
+    ap.add_argument("--gate-null-reps", type=int, default=10)
+    ap.add_argument("--gate-n-sub", type=int, default=6000)
+    ap.add_argument("--gate-n-eig", type=int, default=1500)
+    ap.add_argument("--gate-k-max", type=int, default=12)
     ap.add_argument("--dpi", type=int, default=150)
     args = ap.parse_args(argv)
 
@@ -354,7 +389,9 @@ def main(argv=None):
               f"D_f={rec['D_f']:.3f}  "
               f"S_bb={rec['S_bb']:.3f}"
               f"{' >ln2 FRACTAL' if rec['entropy_fractal'] else '  <=ln2'}"
-              f"  [{'WADA' if rec['strict_fraction'] >= args.wada_thresh else 'not-Wada'}]")
+              f"  [{'WADA' if rec['strict_fraction'] >= args.wada_thresh else 'not-Wada'}]"
+              + ("" if rec["trusted"] else
+                 f"  ** UNTRUSTED: {'degenerate/salt-and-pepper' if rec['degenerate'] else 'no VPS structure'} **"))
 
     if not records:
         sys.exit("[analyze_wada] no usable basin maps (no 'labels' arrays).")
@@ -380,7 +417,9 @@ def main(argv=None):
         w = csv.writer(fh)
         w.writerow(["file", "K", "K_provenance", "n_basins", "n_boundary_px",
                     "n_wada_px", "wada_fraction", "strict_fraction", "D_f",
-                    "is_wada", "S_b", "S_bb", "S_bb_gt_ln2", "agree"])
+                    "is_wada", "S_b", "S_bb", "S_bb_gt_ln2", "agree",
+                    "boundary_box_fraction", "degenerate", "structured",
+                    "trusted"])
         for r in records:
             is_wada = int(r["strict_fraction"] >= args.wada_thresh)
             sbb_frac = int(r["entropy_fractal"])
@@ -391,7 +430,11 @@ def main(argv=None):
                         f"{r['S_b']:.6f}", f"{r['S_bb']:.6f}", sbb_frac,
                         # Wada implies a fractal boundary, so a Wada slice that
                         # fails S_bb > ln 2 is an inconsistency worth inspecting.
-                        int(not (is_wada and not sbb_frac))])
+                        int(not (is_wada and not sbb_frac)),
+                        f"{r['entropy_boundary_fraction']:.6f}",
+                        int(r["degenerate"]),
+                        "" if r["structured"] is None else int(r["structured"]),
+                        int(r["trusted"])])
     np.savez(out_dir / "wada_summary.npz",
              K=Ks, wada_fraction=fracs, strict_fraction=strict, D_f=Dfs,
              S_b=np.array([r["S_b"] for r in records], float),
@@ -403,17 +446,32 @@ def main(argv=None):
 
     # ── cross-check the two criteria ────────────────────────────────────────
     ln2 = math.log(2.0)
-    wada_hits = [r for r in records if r["strict_fraction"] >= args.wada_thresh]
-    sbb_hits = [r for r in records if r["entropy_fractal"]]
 
     def _klist(rs):
         return ", ".join(format(r["K"], "g") for r in rs) or "none"
 
+    # Only trusted slices may contribute a reported result. A degenerate
+    # (salt-and-pepper) or structureless slice satisfies S_bb > ln 2 trivially,
+    # so counting it would manufacture exactly the false positive this gate
+    # exists to prevent.
+    trusted = [r for r in records if r["trusted"]]
+    quarantined = [r for r in records if not r["trusted"]]
+    wada_hits = [r for r in trusted if r["strict_fraction"] >= args.wada_thresh]
+    sbb_hits = [r for r in trusted if r["entropy_fractal"]]
+
     print(f"\n[criteria]  ln 2 = {ln2:.4f}   (entropy box eps = {args.entropy_eps} px)")
+    print(f"[gate]      trusted {len(trusted)}/{len(records)} slices; "
+          f"quarantined {len(quarantined)}   K = {_klist(quarantined)}")
+    if quarantined:
+        print("[gate]      quarantined slices are EXCLUDED below — their "
+              "S_bb/D_f/Wada numbers measure a partition of noise, not geometry.")
+    if not trusted:
+        print("[criteria]  NO TRUSTED SLICES — nothing can be concluded about "
+              "fractality or Wada from this directory.")
     print(f"[criteria]  S_bb > ln 2 (fractal boundary) : "
-          f"{len(sbb_hits)}/{len(records)} slices   K = {_klist(sbb_hits)}")
+          f"{len(sbb_hits)}/{len(trusted)} trusted slices   K = {_klist(sbb_hits)}")
     print(f"[criteria]  strict Wada (>= {args.wada_thresh:.2f})       : "
-          f"{len(wada_hits)}/{len(records)} slices   K = {_klist(wada_hits)}")
+          f"{len(wada_hits)}/{len(trusted)} trusted slices   K = {_klist(wada_hits)}")
     # Wada is strictly stronger than fractality: Wada without S_bb > ln 2 is a
     # contradiction and almost always means one of the tests is misconfigured.
     bad = [r for r in wada_hits if not r["entropy_fractal"]]
