@@ -54,6 +54,17 @@ set -euo pipefail
 : "${K_CLUSTERS:=auto}"              # basin count; 'auto' = VPS consensus
 : "${DTI_PATH:=data/DTI_A.mat}"      # structural connectivity matrix
 : "${RESULTS_ROOT:=data}"            # per-task output root -> data/task_*/
+: "${NULL_REPS:=0}"                  # >0 = structure-vs-noise guard on 'auto'
+                                      # (returns a single basin instead of
+                                      #  fabricating basins from a blob)
+# Network substrate. 'dti' = the empirical connectome; 'er'/'ba'/'ws' swap in a
+# null model of the same node count so fractality can be attributed to topology
+# rather than to brain wiring. Only lorenz_sweep supports --graph today.
+: "${GRAPH:=dti}"                    # dti | er | ba | ws
+: "${GRAPH_SEED:=1}"                 # seed for null-model generation
+: "${BA_M:=5}"                       # BA: edges attached per new node
+: "${WS_K:=10}"                      # WS: neighbours per node (even)
+: "${WS_P:=0.1}"                     # WS: rewiring probability
 
 # ── Working directory and module environment ────────────────────────────────
 cd "$SLURM_SUBMIT_DIR"
@@ -127,8 +138,31 @@ COUPLING=$(awk -v a="$TASK_ID" -v lo="$K_MIN" -v hi="$K_MAX" -v n="$TASK_COUNT" 
 # The task directory lives directly under data/ (matches data/task_*/), and
 # the sweep routes every figure into its derivatives/ subdirectory.
 FRAME_IDX=$(printf "%04d" "$TASK_ID")
-TASK_OUTDIR="${RESULTS_ROOT}/task_${FRAME_IDX}_${OSC_SEL}_K${COUPLING}"
+# Encode the substrate in the task dir so DTI and null-model sweeps never
+# collide in the same RESULTS_ROOT and are self-describing on disk.
+if [ "$GRAPH" = "dti" ]; then
+    TASK_OUTDIR="${RESULTS_ROOT}/task_${FRAME_IDX}_${OSC_SEL}_K${COUPLING}"
+else
+    TASK_OUTDIR="${RESULTS_ROOT}/task_${FRAME_IDX}_${OSC_SEL}_${GRAPH}_K${COUPLING}"
+fi
 mkdir -p "$TASK_OUTDIR/derivatives"
+
+# --graph and --null-reps exist only on lorenz_sweep; keep rossler/hr invocations
+# byte-identical to before so this change cannot regress them.
+GRAPH_ARGS=()
+if [ "$OSC_SEL" = "lorenz" ]; then
+    GRAPH_ARGS+=(--null-reps "$NULL_REPS")
+    if [ "$GRAPH" != "dti" ]; then
+        GRAPH_ARGS+=(--graph "$GRAPH" --graph-seed "$GRAPH_SEED")
+        case "$GRAPH" in
+            ba) GRAPH_ARGS+=(--ba-m "$BA_M") ;;
+            ws) GRAPH_ARGS+=(--ws-k "$WS_K" --ws-p "$WS_P") ;;
+        esac
+    fi
+elif [ "$GRAPH" != "dti" ]; then
+    echo "ERROR: --graph is only supported for OSC=lorenz (got '$OSC_SEL')" >&2
+    exit 1
+fi
 
 echo "==========================================================="
 echo " ACRES coupling-sweep array element"
@@ -146,7 +180,8 @@ python3 -m "$OSC_MODULE" \
     --k-clusters "$K_CLUSTERS" \
     --coupling   "$COUPLING" \
     --dti-path   "$DTI_PATH" \
-    --outdir     "$TASK_OUTDIR"
+    --outdir     "$TASK_OUTDIR" \
+    "${GRAPH_ARGS[@]+"${GRAPH_ARGS[@]}"}"
 
 # ── Register the per-node basin frame in a flat, K-ordered gallery ──────────
 # compile_animation.slurm consumes FRAME_GALLERY as a contiguous, zero-padded
