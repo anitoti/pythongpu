@@ -16,10 +16,19 @@
   - [I.3 Coupling schemes: diffusive Laplacian vs. phase coupling](#i3-coupling-schemes-diffusive-laplacian-vs-phase-coupling)
   - [I.4 State transitions: the RK4 flow map](#i4-state-transitions-the-rk4-flow-map)
   - [I.5 The Vector Pattern State — Definition A (lag–norm signature)](#i5-the-vector-pattern-state--definition-a-lagnorm-signature)
+    - [I.5a The alignment convention — and a discrepancy with the reference implementation](#i5a-the-alignment-convention--and-a-discrepancy-with-the-reference-implementation)
+    - [I.5b The lag–norm confound](#i5b-the-lagnorm-confound)
+    - [I.5c Cost: the FFT is not the bottleneck](#i5c-cost-the-fft-is-not-the-bottleneck)
   - [I.6 The Vector Pattern State — Definition B (neighbor-relative coherence)](#i6-the-vector-pattern-state--definition-b-neighbor-relative-coherence)
+  - [I.6a The Vector Pattern State — Definition C (streaming surrogate), and what it is not](#i6a-the-vector-pattern-state--definition-c-streaming-surrogate-and-what-it-is-not)
   - [I.7 From VPS to labels: model-order selection](#i7-from-vps-to-labels-model-order-selection)
     - [I.7a Consensus selection: elbow, BIC, silhouette, and the structure-vs-noise null guard](#i7a-consensus-selection-elbow-bic-silhouette-and-the-structure-vs-noise-null-guard)
     - [I.7b Emergent attractor counts: DBSCAN with an auto-selected radius](#i7b-emergent-attractor-counts-dbscan-with-an-auto-selected-radius)
+  - [I.8 Lobe-locking: an exact, clustering-free basin label](#i8-lobe-locking-an-exact-clustering-free-basin-label)
+    - [I.8a The mechanism](#i8a-the-mechanism)
+    - [I.8b The label](#i8b-the-label)
+    - [I.8c Validity: the label is only as good as the locking](#i8c-validity-the-label-is-only-as-good-as-the-locking)
+    - [I.8d Consequence for basin geometry](#i8d-consequence-for-basin-geometry)
 - [Part II — Fractal Basin Boundaries and Causation Entropy](#part-ii--fractal-basin-boundaries-and-causation-entropy)
   - [II.1 Basins of attraction and the initial-condition slice](#ii1-basins-of-attraction-and-the-initial-condition-slice)
   - [II.2 Boundary extraction](#ii2-boundary-extraction)
@@ -303,6 +312,61 @@ $$
 
 The scalar $\alpha>0$ (default $1.5$) balances the two feature families so that neither the (integer-valued) lags nor the (magnitude-valued) norms dominate the Euclidean geometry used downstream by $k$-means. This is the `torch.cat([tau_x, L * alpha])` return value.
 
+### I.5a The alignment convention — and a discrepancy with the reference implementation
+
+Definition A is a port of `VectorPatternState.m` (Fish, 2023), the implementation behind Bollt et al. (2023). The port **does not reproduce it numerically**, and the reason is a one-sample convention difference in (I.14).
+
+MATLAB's `xcorr` returns the lag axis `lagsx` $\in\{-(T-1),\dots,T-1\}$, so $\tau_{ij}=$ `lagsx(f)` is a **physical lag**. The reference then forms the residual as
+
+```matlab
+L(jk) = norm( x(1:end-(lag-1), j) - x(lag:end, i) );   % lag > 0
+```
+
+Because MATLAB indexes from $1$, the slice `x(lag:end)` begins at sample $\tau_{ij}$, i.e. it applies a shift of $\tau_{ij}-1$. The physical lag is being used as a **1-based index**. At $\tau_{ij}=1$ both slices are the full series and *no shift is applied at all*, despite a detected lag of one. The port instead shifts by $\tau_{ij}$, as (I.14) states. Writing $s$ for the applied shift, the two conventions are
+
+$$
+s_{\text{ref}} \;=\; \max\big(\lvert\tau_{ij}\rvert-1,\,0\big),
+\qquad
+s_{\text{port}} \;=\; \lvert\tau_{ij}\rvert .
+\tag{I.15a}
+$$
+
+Since $\tau_{ij}$ maximizes the alignment (I.12), evaluating the residual at any other shift can only worsen it. The reference's systematic under-shift therefore **inflates** $\ell_{ij}$. Measured on the reference test matrix `Example_A_3.mat`: $\ell^{\text{ref}}_{ij}\ge\ell^{\text{port}}_{ij}$ on **36/36 pairs**, mean ratio $\mathbf{1.96}$. The lags $\tau_{ij}$ themselves are unaffected by the convention, and agree exactly on that input; they disagree on `Example_A_1/2` (max difference $2$), a separate issue traceable to tie-breaking — MATLAB's `find(cx == max(cx))` returns *every* maximizer while `argmax` returns the first.
+
+Which convention is *correct* and which is *faithful* are different questions, so `vector_pattern_state_fast` exposes both via `alignment='corrected'|'matlab'`; the discrepancy is then a measurement rather than an argument.
+
+### I.5b The lag–norm confound
+
+Equation (I.14) sums over the overlap window $\mathcal O_{ij}$, whose length is $T-\lvert\tau_{ij}\rvert$, and $\lVert\cdot\rVert_2$ is **not** normalized by that length. Hence
+
+$$
+\mathbb E\big[\ell_{ij}^2\big] \;\propto\; \big(T-\lvert\tau_{ij}\rvert\big)
+\tag{I.15b}
+$$
+
+for residuals of fixed per-sample scale: $\ell_{ij}$ shrinks mechanically as $\lvert\tau_{ij}\rvert$ grows, for purely combinatorial reasons unrelated to the dynamics. **The two halves of the signature (I.15) are therefore not independent** — $\ell$ carries a deterministic imprint of $\tau$ — yet they are concatenated and handed to a Euclidean $k$-means as if they were. A length-normalized residual $\ell_{ij}/\sqrt{T-\lvert\tau_{ij}\rvert}$, or a fixed common window, would remove the confound; neither the reference nor the port does this.
+
+### I.5c Cost: the FFT is not the bottleneck
+
+The batched form (I.13) reduces the lag search to $O(T\log T)$ for *all* $M$ pairs at once. The residual (I.14), however, is evaluated in the original implementation by looping over every candidate lag value,
+
+```python
+for lag_val in range(-T_len + 1, T_len):   # 2T-1 iterations
+```
+
+which is $2T-1$ host-side iterations ($19{,}999$ at the production $T=10^4$) and dominates the runtime, negating the FFT's advantage. Benchmarked at $N=83$ ($M=3403$ pairs) against a serial CPU reference of the same algorithm, the looped GPU implementation attains only $3.05\times$ ($T=256$) to $6.54\times$ ($T=2048$), and is $0.83\times$ — *slower than serial* — at $T=128$.
+
+The loop is removable. Each pair has its own $\tau_{ij}$, so rather than iterating over candidate lags one builds per-pair aligned index grids and gathers once:
+
+$$
+\mathcal I^{a}_{t,ij} = t + s_{ij}\mathbb 1[\tau_{ij}>0],\qquad
+\mathcal I^{b}_{t,ij} = t + s_{ij}\mathbb 1[\tau_{ij}<0],\qquad
+\text{valid}_{t,ij} = \mathbb 1\big[\mathcal I^{a}_{t,ij}<T\big]\wedge\mathbb 1\big[\mathcal I^{b}_{t,ij}<T\big],
+\tag{I.15c}
+$$
+
+after which $\ell_{ij}=\lVert(x_{\mathcal I^a}-x_{\mathcal I^b})\odot\text{valid}\rVert_2$ along the time axis. This is `vector_pattern_state_fast`, and it attains $233\times$–$375\times$ over the same serial reference (a further $\sim57\times$ over the looped version) while matching it to float32 precision ($\max\lvert\Delta\ell\rvert=1.9\times10^{-6}$).
+
 ## I.6 The Vector Pattern State — Definition B (neighbor-relative coherence)
 
 The second, and operationally central, VPS is the **per-node coherence vector** of `processing/chimera_classifier.py::local_coherence`. For a trajectory window and coupling matrix $W$, define node $i$'s **local field** as the strength-weighted mean of its neighbors' observables:
@@ -344,6 +408,25 @@ $$
 $$
 
 with $g$ the sample skewness and $\kappa$ the excess kurtosis, provides a continuous corroborating statistic; $\mathrm{BC}>5/9\approx0.555$ is the standard "substantially bimodal" threshold.
+
+## I.6a The Vector Pattern State — Definition C (streaming surrogate), and what it is not
+
+Definitions A and B both require the **whole trajectory** to be resident: A cross-correlates $x_i$ against $x_j$ over all lags, B needs the time series to form variances. For a basin sweep this is fatal. At grid $64^2$ with $N=83$ and $T=10^4$ the trajectory tensor is $O(T\cdot B\cdot N\cdot 3)\approx41$ GB, and the production grid is $361^2$.
+
+`pipeline/lorenz_sweep.py::run_sweep_streaming` therefore accumulates pairwise statistics **online** (Welford), never storing a trajectory, at $O(B\cdot M)$ memory. For each pair it forms
+
+$$
+\tilde\tau_{ij} \;=\; \frac{\big\langle\,\lvert X_i-X_j\rvert\,\big\rangle_t}{\sqrt{\mathrm{Var}_t\big[\lvert X_i-X_j\rvert\big]}},
+\qquad
+\tilde\ell_{ij} \;=\; \big\langle\,\lVert \mathbf x_i-\mathbf x_j\rVert_2\,\big\rangle_t ,
+\tag{I.18a}
+$$
+
+each block independently $z$-scored across the batch before concatenation (the two live on incommensurable scales, and raw concatenation lets $\tilde\ell$ dominate every Euclidean distance).
+
+**This is not Definition A, and the distinction is not cosmetic.** $\tilde\tau$ is a coefficient of variation of the *instantaneous* separation — a dimensionless reciprocal noise-to-signal ratio. It is **not a time lag**; no cross-correlation is computed and no lag is searched. Likewise $\tilde\ell$ is a mean instantaneous distance, with **no alignment** applied. Under a pure time shift $x_j(t)=x_i(t-\Delta)$ — perfect lag synchronization, which Definition A registers as $\tau_{ij}=\Delta,\ \ell_{ij}\approx0$ — the surrogate reports a large $\tilde\ell$ and an unremarkable $\tilde\tau$. The surrogate is therefore **blind to phase-lagged synchrony**, which is precisely the structure the VPS was introduced to detect (Bollt et al. 2023) and the defining signature of a chimera.
+
+The surrogate is a legitimate coherence feature in its own right; it is simply a *different* one. Every basin-sweep result in this repository was computed from (I.18a), not from (I.15) — a memory constraint silently substituting one quantity for another is a failure mode worth stating explicitly, because nothing downstream announces it.
 
 ## I.7 From VPS to labels: model-order selection
 
@@ -406,14 +489,37 @@ k^\star \;=\; \mathrm{round}\big(\mathrm{median}(k_{\text{elbow}},\,k_{\text{bic
 $$
 clipped to $[k_{\min},k_{\max}]$ — a majority-vote-like estimate that is robust to any single criterion's idiosyncratic bias, with all three curves retained for audit.
 
-**Structure-vs-noise null guard.** A near-degenerate feature blob (e.g. a synchronized regime with no real basin structure) can still yield a spurious elbow/BIC optimum $>1$. To prevent fabricating basins out of noise, the best silhouette achievable on the real (PCA-reduced) features, $s^\star_{\text{real}}=\max_k S(k)$, is compared against a **column-shuffle null**: each feature column is independently permuted (destroying joint cluster structure while preserving every marginal distribution), the same best-silhouette statistic $s^\star_{\text{null}}$ is recomputed on the shuffled matrix, and this is repeated to build an empirical null distribution. The features are declared **structured** — and clustering trusted — only if
+**Structure-vs-noise null guard.** A near-degenerate feature blob (e.g. a synchronized regime with no real basin structure) can still yield a spurious elbow/BIC optimum $>1$. To prevent fabricating basins out of noise, the best silhouette achievable on the real features is compared against the same statistic computed on a **structureless reference** of matched shape. The features are declared **structured** — and clustering trusted — only if the *effect size* clears a margin:
 
 $$
-\boxed{\; s^\star_{\text{real}} \;>\; \mathrm{P}_{95}\big(s^\star_{\text{null}}\big) \quad\text{and}\quad s^\star_{\text{real}} \ge s_{\min} \;}
+\boxed{\;
+\Delta \;=\; s^\star_{\text{real}} \;-\; \mathrm{P}_{95}\big(s^\star_{Z}\big) \;\ge\; \Delta_{\min}
+\;}
 \tag{I.25}
 $$
 
-(default floor $s_{\min}=0.10$). If (I.25) fails, $k^\star$ is forced to $1$ (a single basin) regardless of what the elbow/BIC/silhouette curves individually suggest — the count is measured, not tuned, and a flat feature landscape is reported honestly as "no attractors distinguishable" rather than an arbitrary split.
+with $Z$ the reference cloud. If (I.25) fails, $k^\star$ is forced to $1$ — the count is measured, not tuned, and a flat feature landscape is reported honestly as "no attractors distinguishable" rather than an arbitrary split.
+
+Each ingredient of (I.25) exists because a simpler version of the test **failed on real data**, and the failures are instructive.
+
+**(i) The reference must not inherit the real marginals.** The original null permuted each feature column independently, destroying joint structure while preserving every marginal. On outlier-heavy features this is catastrophic: $k$-means maximizes the silhouette by isolating a handful of extreme points, and it can do so equally well on the *shuffled* matrix, because shuffling preserves exactly the tails that make the isolation possible. Measured on the $K\in[0.45,0.65]$ sweep, the shuffle null reached $s^\star_{Z}\approx0.72$–$0.94$ where a null must sit near $0$ (it correctly gave $0.069$ at $K=0$, where the features are genuinely featureless). "Structure" was then being declared on margins as thin as $0.018$ between two numbers both $\approx0.94$. The reference is now drawn from a **single covariance-matched Gaussian**,
+$$
+Z \sim \mathcal N\!\big(\hat\mu,\ \hat\Sigma\big),
+\qquad \hat\mu = \mathrm{mean}(X),\quad \hat\Sigma = \mathrm{cov}(X),
+\tag{I.25a}
+$$
+which is *unimodal by construction* yet reproduces the real elliptical spread — the correct null for the question actually being asked ("one blob, or several?"). It is well calibrated where it matters: on unimodal data it reproduces the data's own score ($\Delta\approx0.00$ on both a Gaussian blob and a heavy-tailed $t_{1.2}$ blob), while genuine three-cluster structure clears it by $\Delta\approx+0.38$. A uniform bounding-box reference (the Tibshirani gap-statistic convention) is retained as an option but is shape-mismatched — a box is easier to beat than an ellipsoid.
+
+**(ii) Only balanced partitions may count.** A split whose smallest cluster holds a handful of points is an outlier split, not a basin, and scores a near-perfect silhouette while conveying nothing. The maximization in $s^\star$ is therefore restricted to partitions satisfying
+$$
+\min_c \frac{\lvert\{i : \text{label}_i = c\}\rvert}{n} \;\ge\; \rho_{\min}
+\tag{I.25b}
+$$
+(default $\rho_{\min}=0.05$). If no $k$ admits a balanced partition, the features are unstructured by definition.
+
+**(iii) The margin must exceed the statistic's own scatter.** $s^\star$ is itself a random variable, and on heavy-tailed features its run-to-run scatter is substantial: on one fixed configuration ($n=3000$, $d=60$, $t_{1.2}$) it moved $0.172\to0.076$ **on the random seed alone**. A margin of $0.05$ sits *inside* that scatter, and duly produced a false "structured" verdict at $\Delta=+0.053$ that vanished on reseeding. A threshold crossable by reseeding is not a threshold; hence $\Delta_{\min}=0.15$ by default, comfortably below the $\approx+0.4$ of genuine structure and well above the noise.
+
+The general lesson is worth stating once: **an estimator that cannot abstain is not evidence.** The elbow (I.23) always returns a knee, $k$-means always returns $k$ groups, and a silhouette test with an inflated null always finds structure. Each must be given an explicit way to answer "nothing here," and each such mechanism must itself be validated against data whose answer is already known.
 
 ### I.7b Emergent attractor counts: DBSCAN with an auto-selected radius
 
@@ -431,6 +537,89 @@ concatenated into a $3N$-vector per initial condition. Being long-time averages,
 **Auto-radius via the $k$-distance knee.** After standardizing and (if wide) PCA-reducing the descriptor matrix, DBSCAN's neighborhood radius $\varepsilon$ is not hand-set but read off the data: for each point, the distance to its $m$-th nearest neighbor ($m=$ `min_samples`) is computed, these distances are sorted ascending into the **$k$-distance graph**, and $\varepsilon_0$ is set to the value at the graph's knee — located by the same Kneedle formula (I.23), applied to the sorted-distance curve instead of an inertia curve. This is the standard DBSCAN radius-selection heuristic (Ester et al. 1996; Kneedle: Satopää et al. 2011).
 
 **Radius-sensitivity scan.** DBSCAN is run at $\varepsilon\in\{0.7\varepsilon_0,\ 1.0\varepsilon_0,\ 1.4\varepsilon_0\}$; the attractor count is the number of non-noise clusters at $\varepsilon_0$, and the estimate is flagged **radius-stable** only if all three scales agree. An emergent count is trustworthy exactly when it is insensitive to the arbitrary choice of neighborhood scale — the analogue, for cluster *count*, of the $R^2$ goodness-of-fit check on $D_f$ in (II.9).
+
+**Plateau vs. continuum.** Three points are too coarse to settle the question they are asked. Applied to the DTI-coupled Lorenz sweep, the scan returned counts of $1,1,39,4,6,3,11$ across $K$ with **not one** radius-stable verdict, and individual scans as violent as $64\to6\to2$ (and $46\to4\to9$, non-monotone). Such numbers are artifacts of where the knee happened to land.
+
+The decisive test is the *shape* of the count-versus-radius curve. $n$ well-separated attractors hold the same count over a **broad** range of $\varepsilon$, because real density gaps do not care where the threshold is put; a continuum — one connected cloud of varying density — fragments monotonically with no flat region. `scan_radius` therefore sweeps $\varepsilon$ over $[\,0.25\varepsilon_0,\ 4\varepsilon_0\,]$ geometrically and reports the longest run of a constant count, measured in **radius decades** so the verdict is independent of sampling density:
+
+$$
+\mathcal P \;=\; \max\Big\{\ \log_{10}\tfrac{\varepsilon_b}{\varepsilon_a}\ :\ n(\varepsilon)\ \text{constant on}\ [\varepsilon_a,\varepsilon_b]\ \Big\},
+\qquad \mathcal P \ge 0.3 \;\Rightarrow\; \text{report the count}.
+\tag{I.26a}
+$$
+
+Validated on ground truth: three separated groups yield a plateau at $n=3$ spanning $0.75$ decades; a single blob yields a plateau at $n=1$ spanning $0.79$ decades — the correct answer in both cases. Absent a plateau, **no number is reported at all**.
+
+**A structural blind spot.** Even so, density clustering has a failure mode that the plateau test cannot repair: it reports the number of *well-separated* groups. If a system possesses combinatorially many attractors whose descriptors densely fill a region — as §I.8 establishes is the case here — the descriptor cloud is one connected component, DBSCAN returns $n=1$, and no radius exhibits a plateau. **The verdict "one attractor" and the verdict "a continuum of attractors" are indistinguishable to this method.** The count of §I.8b, which never clusters at all, exists to resolve exactly this ambiguity.
+
+## I.8 Lobe-locking: an exact, clustering-free basin label
+
+Every construction in §I.7 estimates a label by clustering a continuous feature vector, and each inherits the pathologies catalogued there. For the Laplacian-coupled Lorenz network the estimation is unnecessary: the label is **discrete and directly observable**.
+
+### I.8a The mechanism
+
+The Lorenz attractor is symmetric under $(X,Y,Z)\mapsto(-X,-Y,Z)$ and carries two wings, centered on the fixed points $C^{\pm}=\big(\pm\sqrt{\beta(\rho-1)},\,\pm\sqrt{\beta(\rho-1)},\,\rho-1\big)$, i.e. $X\approx\pm7.8$ at the standard parameters. An **ergodic** trajectory visits both wings, so by symmetry its long-time mean satisfies $\langle X_i\rangle\to0$. A trajectory **locked** to a single wing instead yields $\langle X_i\rangle\approx\pm7.8$. The order parameter
+
+$$
+\Lambda \;=\; \frac{1}{N}\sum_{i=1}^{N}\big\lvert\langle X_i\rangle\big\rvert
+\tag{I.27}
+$$
+
+therefore separates the two regimes cleanly, and the locked fraction is $\mathbb P\big[\lvert\langle X_i\rangle\rvert>\theta\big]$ with $\theta=4$ (any cut well inside $(0,7.8)$ serves).
+
+Measured on a deterministic $32^2$ slice ($1024$ initial conditions, transient $100$, window $600$):
+
+| $K$ | $\Lambda$ | locked |
+|---|---|---|
+| $0.00$ | $0.026$ | $0.0\%$ |
+| $0.05$ | $1.202$ | $11.0\%$ |
+| $0.08$ | $5.318$ | $66.0\%$ |
+| $0.12$ | $6.847$ | $87.8\%$ |
+| $0.20$ | $7.291$ | $95.1\%$ |
+| $0.50$ | $6.934$ | $97.8\%$ |
+
+Uncoupled, every node is ergodic and $\Lambda\to0$; coupled, the network pins its nodes to individual wings. The distribution of $\langle X_i\rangle$ is sharply **bimodal** at $\pm7$ once locked (at $K=0.5$, only $0.3\%$ of nodes lie in $\lvert\langle X\rangle\rvert<1$). The transition is a clean sigmoid with midpoint $K\approx0.07$.
+
+### I.8b The label
+
+Once locked, the network's asymptotic state is fully specified by *which* wing each node occupies:
+
+$$
+\boxed{\;
+\mathbf b \;=\; \Big(\operatorname{sign}\langle X_1\rangle,\ \dots,\ \operatorname{sign}\langle X_N\rangle\Big)\ \in\ \{-1,+1\}^{N}
+\;}
+\tag{I.28}
+$$
+
+— an exact, discrete, $N$-bit label admitting up to $2^{83}\approx10^{25}$ values. It requires **no clustering, no $k$, no elbow, no silhouette, no null test**: the entire apparatus of §I.7, and every failure mode it guards against, is bypassed. The count of distinct realized $\mathbf b$ is then a direct measurement rather than an estimate.
+
+At $K=0.5$, $1024$ initial conditions realize **$1010$ distinct patterns**, the largest basin holding $4$ ($0.4\%$); the mean Hamming distance between patterns is $41.5$ of $83$ bits — exactly the separation of *random* bit strings, so grid neighbours reach statistically independent patterns. The sampling is **saturated**: the true count is $\ge1010$ and bounded only by $B$.
+
+This resolves the blind spot of §I.7b. The descriptors of $\sim10^3$ densely-packed attractors form one connected cloud, so DBSCAN reports $n=1$ with no plateau — a **false negative**, not a discovery of monostability. It also explains the pathologies of §I.7a: no $k$ is correct when the true count is astronomical, so the elbow's $6$–$8$ and the silhouette's $2$ are both meaningless, and neither the consensus nor any repair of it could have been right.
+
+### I.8c Validity: the label is only as good as the locking
+
+Definition (I.28) thresholds at zero, so where $\langle X_i\rangle\approx0$ the sign is decided by sampling noise. The label must therefore be validated, not assumed. Computing $\mathbf b$ over two **disjoint** windows of the same trajectories ($t\in[100,700]$ vs $[700,1300]$) gives:
+
+| $K$ | locked | bits agreeing | exact $\mathbf b$ |
+|---|---|---|---|
+| $0.01$ | $0.0\%$ | $\mathbf{50.2\%}$ | $0.0\%$ |
+| $0.06$ | $32.8\%$ | $91.1\%$ | $3.6\%$ |
+| $0.10$ | $80.7\%$ | $98.0\%$ | $30.1\%$ |
+| $0.20$ | $95.1\%$ | $98.7\%$ | $63.5\%$ |
+| $0.50$ | $97.8\%$ | $\mathbf{99.9\%}$ | $94.6\%$ |
+
+The $K=0.01$ row is the **negative control and it passes**: a $50.2\%$ coin flip exactly where the theory says the signs are noise. Agreement then tracks the locking monotonically to $99.9\%$. **The label is precisely as trustworthy as $\Lambda$ is large** — decisive at $K=0.5$, meaningless at $K=0.01$.
+
+Note that the two right-hand columns measure different things and can disagree while both are correct: with $N=83$ independent bits, $0.98^{83}\approx0.19$, so $98\%$ per-bit agreement *necessarily* implies only $\sim30\%$ of patterns reproduce exactly. At $K=0.10$ roughly $1.5$ nodes per initial condition flicker; the pattern is mostly, but not wholly, permanent.
+
+Two caveats bound the present evidence. First, $\Lambda$ measured on the second window **exceeds** the first at every coupling ($+26\%$ at $K=0.06$, still rising at $K=0.20$): the system is *still consolidating* at $t=1300$, most strongly near the onset — the critical slowing down expected near a bifurcation, and a warning that transients near $K\approx0.07$ far exceed the $100$ discarded here. Second, the natural refinement is to restrict (I.28) to the locked subset $\{i:\lvert\langle X_i\rangle\rvert>\theta\}$, since the unlocked minority supplies the flicker.
+
+### I.8d Consequence for basin geometry
+
+The riddling of Part II is then not an artifact but a prediction. With $\gtrsim10^3$ interleaved basins whose neighbours are uncorrelated, essentially every pixel of a basin map borders a differently-labelled pixel; the boundary is **space-filling**, so $D_f\to d$ and $\alpha=d-D_f\to0$ by (II.9) and (II.13). The observed $D_f\approx1.89$–$1.96$, $\alpha\approx0.04$, flat in $K$, is exactly this — and "flat in $K$" is expected, since locking (and hence riddling) persists across the whole swept range.
+
+The basin *sizes* order the regimes. The largest basin holds $0.1\%$ of initial conditions below the onset (sign noise), rises to $9.3\%$ at $K\approx0.12$, and falls to $0.4\%$ by $K=0.5$. The reference coupling of Bollt et al. (`gel = 0.5`) thus sits deep in the riddled regime, where individual basins are too finely intermingled to map; the only window in which basins have appreciable measure is $K\approx0.08$–$0.12$ — where, per §I.8c, the labels are not yet fully permanent.
 
 ---
 
