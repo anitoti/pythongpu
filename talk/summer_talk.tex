@@ -1,23 +1,20 @@
 %=======================================================================
-%  Anna Totilca  —  Clarkson University REU 2026  —  Advisor: Dr. Jeremie Fish
-%  End-of-Summer Conference Talk (15 min)
-%  "Do the Brain's Fractal Basins Survive a Stress Test?"
+%  Anna Totilca — Clarkson University REU 2026 — Advisor: Dr. Jeremie Fish
+%  End-of-summer talk, 15 minutes.
 %
-%  BUILD:  pdflatex summer_talk.tex   (twice, for slide totals)
-%  FIGURES: drop PNGs into ./figs/ using the \fig{...} names.
-%           Missing figures render a placeholder, so this ALWAYS compiles.
+%  Build:  pdflatex summer_talk.tex   (run twice)
+%  Figures: put PNGs in ./figs/. Missing ones render as a labelled box, so
+%           the deck always compiles.
 %
-%  HONESTY NOTE (read me):
-%  Every number in this deck is one that was actually produced and checked.
-%  Claims that could not be reproduced from the repository (a Kuramoto
-%  D_f=1.8622, a "61 ms" VPS timing, a cross-model universality table) have been
-%  REMOVED rather than repeated. The result here is a negative one, and it is
-%  stronger for being defensible.
+%  Ground rule for this file: every number appears here only if it came out
+%  of a run I can point to. Numbers I could not reproduce from the repo
+%  (a Kuramoto D_f=1.8622, a "61 ms" VPS timing, the cross-model table) are
+%  not in the deck.
 %=======================================================================
 \documentclass[aspectratio=169, 9pt]{beamer}
 
 \usepackage{tikz}
-\usepackage{amsmath, amssymb}
+\usepackage{amsmath, amssymb, amsthm}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
@@ -27,7 +24,6 @@
 \usepackage{array}
 \usetikzlibrary{calc, positioning, arrows.meta}
 
-% ─── PALETTE ───────────────────────────────────────────────────────────
 \definecolor{Ochre}{RGB}{196,154,60}
 \definecolor{Rust}{RGB}{178,71,39}
 \definecolor{Olive}{RGB}{91,103,55}
@@ -35,10 +31,9 @@
 \definecolor{DarkBrown}{RGB}{42,28,18}
 \definecolor{SandLight}{RGB}{230,218,190}
 
-\setbeamersize{text margin left=6pt, text margin right=6pt}
+\setbeamersize{text margin left=8pt, text margin right=8pt}
 \setbeamerfont{normal text}{size=\small}
 \setbeamerfont{itemize/enumerate body}{size=\small}
-\setbeamerfont{itemize/enumerate subbody}{size=\footnotesize}
 \setbeamerfont{block body}{size=\footnotesize}
 \setbeamerfont{block title}{size=\small, series=\bfseries}
 \AtBeginDocument{\small}
@@ -53,7 +48,6 @@
 \setbeamercolor{date}{fg=SandLight}
 \setbeamercolor{normal text}{fg=DarkBrown}
 \setbeamercolor{itemize item}{fg=Rust}
-\setbeamercolor{itemize subitem}{fg=Ochre}
 \setbeamercolor{block title}{bg=Rust, fg=Cream}
 \setbeamercolor{block body}{bg=SandLight, fg=DarkBrown}
 \setbeamercolor{alerted text}{fg=Rust}
@@ -66,7 +60,7 @@
     \fill[DarkBrown] (current page.south west) rectangle (\paperwidth, 0.45cm);
     \node[anchor=west, text=SandLight, font=\tiny]
       at ([xshift=6pt, yshift=0.22cm]current page.south west)
-      {Nimble Brain Project $\cdot$ Clarkson REU 2026};
+      {Nimble Brain $\cdot$ Clarkson REU 2026};
     \node[anchor=east, text=SandLight, font=\tiny]
       at ([xshift=-6pt, yshift=0.22cm]current page.south east)
       {\insertframenumber\,/\,\inserttotalframenumber};
@@ -76,9 +70,7 @@
 \newcommand{\GeoPanels}{%
   \begin{tikzpicture}[overlay, remember picture]
     \fill[Ochre!70] (current page.north west) -- ++(1.6,0) -- ++(0,-0.9) -- cycle;
-    \fill[Rust!80] ([xshift=-0.9cm]current page.north east) rectangle ([yshift=-0.45cm]current page.north east);
     \fill[Olive!80] (current page.south west) rectangle ++(2.2, 0.45);
-    \fill[Ochre!60] (current page.south east) -- ++(-1.1,0.45) -- ++(0,-0.45) -- cycle;
   \end{tikzpicture}%
 }
 
@@ -98,15 +90,13 @@
     \fill[DarkBrown] (current page.south west) rectangle (current page.north east);
     \fill[Rust] (current page.south west) rectangle ([xshift=2.4cm]current page.north west);
     \fill[Ochre] ([xshift=2.4cm]current page.south west) rectangle ([xshift=3.0cm]current page.north west);
-    \fill[Olive] (current page.north west) rectangle ([yshift=-0.55cm]current page.north east);
-    \fill[Ochre!60] (current page.south west) rectangle ([yshift=0.55cm]current page.south east);
   \end{tikzpicture}%
   \begin{columns}[c]
     \column{0.05\textwidth}
     \column{0.90\textwidth}
-      \vspace{1.5cm}
+      \vspace{1.2cm}
       {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
-      \vspace{0.2cm}
+      \vspace{0.25cm}
       {\fontsize{9}{11}\selectfont\color{SandLight}\insertsubtitle\par}
       \vspace{0.4cm}
       \tikz\fill[Ochre] (0,0) rectangle (5.5cm, 0.06cm);
@@ -119,590 +109,724 @@
 
 \newcommand{\fig}[2]{%
   \IfFileExists{figs/#1}{%
-    \includegraphics[width=\linewidth, height=0.62\textheight, keepaspectratio]{figs/#1}%
+    \includegraphics[width=\linewidth, height=0.6\textheight, keepaspectratio]{figs/#1}%
     \par{\tiny #2}%
   }{%
     \begin{tikzpicture}
       \draw[dashed, Rust, line width=1pt, fill=SandLight]
-        (0,0) rectangle (\linewidth,0.52\textheight);
+        (0,0) rectangle (\linewidth,0.5\textheight);
       \node[align=center, text=Rust, font=\footnotesize\bfseries]
-        at (0.5\linewidth,0.30\textheight)
+        at (0.5\linewidth,0.29\textheight)
         {[ FIGURE ]\\[3pt]{\ttfamily\detokenize{figs/#1}}};
       \node[align=center, text=DarkBrown, font=\tiny]
-        at (0.5\linewidth,0.10\textheight) {#2};
+        at (0.5\linewidth,0.09\textheight) {#2};
     \end{tikzpicture}%
   }%
 }
 
-\title{Do the Brain's Fractal Basins\\Survive a Stress Test?}
-\subtitle{Building the pipeline --- and discovering that its headline number was an artifact}
+\title{When Is a Fractal Basin Real?}
+\subtitle{Measuring basin geometry in a brain-wired chaotic network --- and stress-testing the measurement}
 \author{Anna Totilca \\ {\footnotesize Advisor: Dr.\ Jeremie Fish $\cdot$ Clarkson University REU 2026}}
 \date{Summer 2026 $\cdot$ Potsdam, NY}
 
 \begin{document}
 
-% ══════════════════════════════════════════════════════════════════════
+% ═══════════════════════════════════════════════════ 1
 \begin{frame}[plain]
   \titlepage
 \end{frame}
-\note{Hi, I'm Anna. I worked with Dr. Fish on the "nimble brain" problem.
-Honest framing up front: I built the tool, I ran it, it gave a number — and then
-I spent the second half of the summer proving that number was wrong. That's the
-talk. ~30 sec.}
+\note{I'm Anna, I worked with Dr. Fish. Roadmap in one sentence: I'll spend five minutes
+on why anyone cares and what the words mean, then show you the number my pipeline produced,
+then show you why I stopped believing it. ~30 s.}
 
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Big Question: Why Is the Brain So Nimble?}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{block}{The puzzle}
-    The brain switches between cognitive states in \textbf{milliseconds}, with
-    \textbf{no central controller}. How can it be both \emph{stable} and so
-    \emph{easy to nudge}?
-  \end{block}
-  \begin{columns}[T]
-    \column{0.48\textwidth}
-      \begin{block}{The proposed mechanism}
-        Bollt, Fish et al.: the brain's stable states are separated by
-        \textbf{fractal boundaries}. If the ridgeline between two valleys is
-        infinitely crinkly, you are always right next to an edge --- a tiny
-        stimulus flips you. \textbf{Crinkliness = nimbleness.}
-      \end{block}
-    \column{0.48\textwidth}
-      \begin{block}{My job this summer}
-        \textbf{Measure} that crinkliness computationally --- and, crucially,
-        \textbf{check whether the measurement is real}.
-      \end{block}
-  \end{columns}
-  \vfill
-  {\footnotesize\color{Rust}\textit{``Small changes in current state caused by environmental stimuli
-  would be enough to switch between distinct stable brain states.''} — Bollt et al.}
-\end{frame}
-\note{Marble-on-a-landscape analogy. Valleys = brain states. Smooth ridgeline = you need a
-big shove. Crinkly/fractal ridgeline = you're always on the edge. That crinkliness IS the
-proposed mechanism for nimbleness. Totally non-technical here. ~1.5 min.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{Vocabulary: Basins, and What ``Fractal'' Buys You}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.48\textwidth}
-      \begin{block}{Attractor \& basin}
-        An \textbf{attractor} is a long-run state the system settles into. Its
-        \textbf{basin} is every starting point that ends up there.
-        \smallskip
-        Colour each starting point by which attractor it reaches $\Rightarrow$ a
-        \textbf{basin map}. Real basins look like \emph{connected regions}.
-      \end{block}
-    \column{0.48\textwidth}
-      \begin{block}{Fractal boundary}
-        Boundary dimension $D$ lives between a smooth curve ($D{=}1$) and a
-        space-filling set ($D{=}2$).
-        \smallskip
-        $1<D<2$ $\Rightarrow$ genuinely fractal $\Rightarrow$ poised at the edge.
-        \smallskip
-        \alert{But $D\to2$ is ambiguous:} an intricately interwoven boundary and
-        a \textbf{meaningless random labelling} both give $D\approx2$. Remember this.
-      \end{block}
-  \end{columns}
-  \vfill
-  \centering{\footnotesize How $D$ is measured: cover the boundary with boxes of size $s$,
-  count how many are touched. If $N(s)\sim s^{-D}$, the log--log slope is $D$.}
-\end{frame}
-\note{Plant the landmine here, gently: D near 2 has TWO explanations — beautiful fractal, or
-garbage labels. The whole second half of the talk turns on distinguishing them. Say it once
-now so the payoff lands later. ~1.5 min.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Setup: Chaotic Oscillators Wired by a Real Brain}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.54\textwidth}
-      \begin{block}{The model}
-        Each of 83 brain regions is a Lorenz oscillator, coupled through the
-        graph Laplacian $L$ of a real human \textbf{DTI} scan:
-        \[
-          \dot{\mathbf{x}}_i = f(\mathbf{x}_i)\;-\;K\,(L\mathbf{x})_i\,\hat{e}_x
-        \]
-        \footnotesize
-        $K$ = coupling strength, the one knob I sweep. State space: $83\times3 = 249$
-        dimensions. I take a \textbf{2-D slice}: perturb two nodes, fix the rest.
-      \end{block}
-    \column{0.44\textwidth}
-      \begin{block}{The measurement problem}
-        \footnotesize
-        Each run gives a 249-D chaotic trajectory. To colour a basin map I need
-        one \textbf{label} per starting point: \emph{which attractor did it reach?}
-        \smallskip
-        Two ICs on the \emph{same} chaotic attractor have totally different
-        trajectories --- so I cannot compare trajectories directly. I need an
-        \textbf{attractor-invariant fingerprint}.
-      \end{block}
-  \end{columns}
-\end{frame}
-\note{Key subtlety worth 20 seconds: one chaotic attractor still means ONE attractor, even
-though no two trajectories on it look alike. So "many different time series" does NOT mean
-"many attractors." That's why we need a fingerprint that's constant on an attractor. ~1.5 min.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Fingerprint (VPS) --- and the Step That Hides a Trap}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.54\textwidth}
-      \begin{block}{Vector Pattern State}
-        For every pair of nodes $(i,j)$, two time-averaged numbers:
-        \begin{enumerate}\setlength\itemsep{1pt}
-          \item \textbf{phase coherence} --- how locked are they?
-          \item \textbf{amplitude relation} --- how similar in scale?
-        \end{enumerate}
-        \footnotesize
-        Stack all $\binom{83}{2}=3403$ pairs $\Rightarrow$ a \textbf{6806-D} vector per
-        starting point. Time averages, so constant on one attractor. \checkmark
-      \end{block}
-    \column{0.44\textwidth}
-      \begin{block}{\alert{Then: k-means}}
-        \footnotesize
-        Cluster the fingerprints; each cluster $=$ one basin $=$ one colour.
-        \smallskip
-        \alert{k-means \emph{always} returns exactly $k$ groups.} Hand it
-        structureless data and it will not complain --- it will hand back $k$
-        confident, meaningless basins.
-        \smallskip
-        \textbf{This is the trap the whole talk is about.}
-      \end{block}
-  \end{columns}
-  \vfill
-  \centering{\footnotesize Pipeline: 2-D slice $\to$ $361^2 = 130{,}321$ initial conditions
-  $\to$ batched RK4 on GPU $\to$ VPS $\to$ cluster $\to$ box-count $D$.}
-\end{frame}
-\note{Two beats: (1) VPS is a legit attractor-invariant fingerprint — time averages. (2) But
-the NEXT step, k-means, can't say "there's nothing here." Foreshadow hard. ~1.5 min.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{Engineering: What Made Any of This Possible}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.52\textwidth}
-      \begin{block}{The bottleneck}
-        Resolving a fractal boundary needs a huge grid of initial conditions.
-        Every point is an independent simulation --- embarrassingly parallel ---
-        but the original MATLAB ran them one at a time.
-      \end{block}
-      \begin{block}{Rebuilt in PyTorch on the ACRES cluster}
-        \footnotesize
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item \textbf{Batched RK4}: all $130{,}321$ ICs integrated simultaneously on one GPU
-          \item \textbf{Streaming VPS} (Welford): 6806 features per IC without running out of memory
-          \item \textbf{SLURM job arrays}: one coupling $K$ per GPU task
-        \end{itemize}
-      \end{block}
-    \column{0.44\textwidth}
-      \begin{block}{Scale actually achieved}
-        \centering\footnotesize
-        \begin{tabular}{ll}
-          \toprule
-          Grid & $361\times361$ ICs \\
-          Nodes & 83 (DTI connectome) \\
-          Features & 6806 per IC \\
-          Runtime & $\approx$1 GPU-hour per $K$ \\
-          Sweep & 20 couplings, $K\in[0.45,0.65]$ \\
-          \bottomrule
-        \end{tabular}
-        \par\smallskip
-        {\footnotesize Every raw feature matrix is \textbf{saved}, so re-analysis
-        needs \emph{no} re-integration --- this is what made the stress tests
-        below affordable.}
-      \end{block}
-  \end{columns}
-\end{frame}
-\note{Method-as-enabler beat, but keep it honest: the numbers here are ones we actually ran.
-The saved-features detail matters — it's why I could re-test everything for free instead of
-burning another week of GPU time. ~1.5 min.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Result That Started the Investigation}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.46\textwidth}
-      \begin{block}{What the pipeline reported}
-        Across the whole sweep $K\in[0.45,0.65]$:
-        \[
-          \boxed{\,D_f \approx 1.89\text{--}1.96\,}
-        \]
-        $1<D_f<2$, excellent fit ($R^2>0.99$). Read naively: a strongly fractal,
-        intricately interwoven boundary. \textbf{Exactly the headline the project
-        wanted.}
-      \end{block}
-      \begin{block}{Two things that did not smell right}
-        \footnotesize
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item $D_f$ was \textbf{flat in $K$} --- unchanged across the whole
-                sweep. Real bifurcation structure should \emph{move}.
-          \item The automatic basin-count selector chose \textbf{6--8} basins,
-                while the silhouette criterion said \textbf{2}.
-        \end{itemize}
-      \end{block}
-    \column{0.50\textwidth}
-      \centering
-      \fig{basin_map_K065.png}{The basin map at $K=0.65$. This is what
-      $D_f=1.96$ was measuring.}
-  \end{columns}
-\end{frame}
-\note{Show the number first, straight. Let it look like a win for 10 seconds. Then the figure:
-it's PURE STATIC. No connected regions at any scale. Pause. Let the room see it. Say: "a
-basin map with no connected regions is not a basin map." ~2 min. This is the pivot of the talk.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Hypothesis}
+% ═══════════════════════════════════════════════════ 2
+\begin{frame}{The Puzzle: Stability and Nimbleness at the Same Time}
   \GeoPanels
   \vspace{0.3cm}
-  \begin{block}{H1 --- the null I set out to kill}
-    \centering\normalsize
-    \textbf{$D_f\approx1.9$ is not a fractal boundary. It is what box-counting
-    returns when you impose a clustering on features that do not separate.}
-  \end{block}
+  Your brain holds a thought steadily --- and drops it the instant something
+  relevant happens. Those two demands fight each other.
+  \vspace{0.35cm}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      \begin{block}{Too stable}
+        A state you cannot leave without a large push. Robust, but rigid ---
+        you would not notice the fire alarm.
+      \end{block}
+    \column{0.47\textwidth}
+      \begin{block}{Too unstable}
+        A state that noise destroys on its own. Responsive, but you could not
+        hold a thought for a second.
+      \end{block}
+  \end{columns}
+  \vspace{0.35cm}
+  The brain does both, in milliseconds, with \textbf{no central controller}
+  deciding when to switch. Whatever resolves this tension has to be built into
+  the \emph{geometry} of the system itself.
+  \vfill
+  {\footnotesize\color{Rust}\textit{``Small changes in current state caused by environmental
+  stimuli would be enough to switch between distinct stable brain states.''}
+  \hfill --- Bollt, Fish, et al.}
+\end{frame}
+\note{Don't rush this. The tension is the hook: stability and sensitivity are opposites, and
+the brain refuses to choose. No homunculus is flipping the switch. So the resolution must be
+structural. ~1 min.}
+
+% ═══════════════════════════════════════════════════ 3
+\begin{frame}{The Proposed Answer, in One Picture}
+  \GeoPanels
   \vspace{0.2cm}
   \begin{columns}[T]
-    \column{0.48\textwidth}
-      \begin{block}{Why it is plausible}
-        \footnotesize
-        If labels are pixel-level noise, then \emph{every} pixel is a boundary
-        pixel. The boundary becomes \textbf{space-filling}, so
-        \[ D_f \to 2, \qquad \gamma = 2-D_f \to 0. \]
-        We measured $D_f\approx1.96$, $\gamma\approx0.04$. \textbf{That is the
-        fingerprint of noise}, and it is indistinguishable from ``beautiful fractal''
-        if you only look at $D_f$.
+    \column{0.52\textwidth}
+      \vspace{0.2cm}
+      Picture a marble on a landscape of valleys. Each \textbf{valley} is a brain
+      state; where the marble rolls depends on where you drop it.
+      \medskip
+
+      If the \textbf{ridgelines} are smooth, you need a big shove to change valleys.
+      \medskip
+
+      But if the ridgelines are infinitely crinkly --- \textbf{fractal} --- then
+      almost wherever you stand, an edge is a hair's breadth away. A whisper of a
+      stimulus moves you.
+      \medskip
+
+      {\color{Rust}\textbf{Crinkliness is nimbleness.}} That is the hypothesis
+      this project exists to test.
+    \column{0.44\textwidth}
+      \centering
+      \fig{basin_cartoon.png}{Smooth boundary (left): hard to switch.
+      Fractal boundary (right): always poised at an edge.}
+  \end{columns}
+\end{frame}
+\note{This is the one mental image the audience must leave with. Say it slowly; draw the
+ridgeline in the air with your hand. Everything technical after this is just: how do you
+measure crinkliness, and how do you know you measured it and not an illusion. ~1 min.}
+
+% ═══════════════════════════════════════════════════ 4
+\begin{frame}{Why It Matters Beyond Neuroscience}
+  \GeoPanels
+  \vspace{0.25cm}
+  The same geometry governs any system of coupled oscillators that has to be
+  both reliable and switchable:
+  \vspace{0.3cm}
+  \begin{columns}[T]
+    \column{0.31\textwidth}
+      \begin{block}{Brain dynamics}
+        Rapid task switching; and pathological \emph{failures} to switch ---
+        seizures are a network locking into one state.
       \end{block}
-    \column{0.48\textwidth}
-      \begin{block}{Testable predictions}
-        \footnotesize
-        If H1 is true, then:
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item[\textbf{P1}] the basin-count selector is fitting a knee that does not exist
-          \item[\textbf{P2}] the VPS features carry \textbf{no separable structure}
-          \item[\textbf{P3}] a counting method that is \emph{allowed} to answer ``1''
-                will answer 1 --- not 6--8
-          \item[\textbf{P4}] an \textbf{independent} descriptor will agree
-        \end{itemize}
+    \column{0.31\textwidth}
+      \begin{block}{Power grids}
+        Generators must stay phase-locked. Which disturbances tip the grid out of
+        sync is exactly a basin-boundary question.
+      \end{block}
+    \column{0.31\textwidth}
+      \begin{block}{Predictability itself}
+        When boundaries are fractal, more precise measurement buys you almost
+        \emph{no} extra predictive power. That is a hard limit, not an engineering
+        problem.
+      \end{block}
+  \end{columns}
+  \vspace{0.35cm}
+  \centering
+  The mathematics does not know it is in a skull. If fractal basins are generic in
+  coupled networks, ``nimbleness'' is a property of \textbf{wiring}, not of neurons.
+\end{frame}
+\note{Answers "why should I care" for the non-neuro people. The predictability point is the
+deep one: fractal basins mean a fundamental obstruction, not a measurement problem. ~1 min.}
+
+% ═══════════════════════════════════════════════════ 5
+\begin{frame}{Vocabulary: Attractor, Basin, Basin Map}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \begin{block}{Attractor {\normalfont(the valley)}}
+        A compact set $A$, invariant under the flow ($\varphi_t(A)=A$), with an
+        open neighbourhood $U$ such that every trajectory starting in $U$
+        converges to $A$; and \emph{minimal} --- no proper piece of it is itself
+        attracting.
+      \end{block}
+      \begin{block}{Basin {\normalfont(where you must drop the marble)}}
+        \[ \mathcal{B}(A)=\{\,\mathbf{x}_0 : \omega(\mathbf{x}_0)\subseteq A\,\} \]
+        The set of initial conditions whose long-run limit is $A$.
+      \end{block}
+    \column{0.42\textwidth}
+      \begin{block}{Basin map {\normalfont(the picture)}}
+        Sample a grid of initial conditions, colour each by \emph{which} attractor
+        it reaches. Real basins appear as \textbf{connected regions}. The
+        boundaries between colours are the object we measure.
+      \end{block}
+      \begin{block}{\alert{The fact that matters most}}
+        Fix the parameters and the system \emph{has} some definite number of
+        attractors. It is a property of the equations --- not a setting we choose.
+        \textbf{We are estimating an integer that is already out there.}
       \end{block}
   \end{columns}
 \end{frame}
-\note{This is the scientific core. State the hypothesis as a falsifiable claim with four
-predictions. This is what turns "my code was buggy" into "I did science." ~1.5 min.}
+\note{Give the real definition, then immediately translate: attractor = valley, basin = which
+starting points roll there, basin map = the colored picture. The last box is the seed of the
+entire second half — the count is a FACT, not a knob. ~1.5 min.}
 
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{P1 --- The Elbow Was Fitting a Knee That Isn't There}
+% ═══════════════════════════════════════════════════ 6
+\begin{frame}{Vocabulary: Fractal Boundary --- and an Ambiguity}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \textbf{Box-counting dimension.} Cover the boundary with boxes of side
+      $\varepsilon$; let $N(\varepsilon)$ be the number of boxes it touches. If
+      $N(\varepsilon)\sim\varepsilon^{-D}$, then
+      \[ D_0=\lim_{\varepsilon\to0}\frac{\log N(\varepsilon)}{\log(1/\varepsilon)} \]
+      \smallskip
+      Smooth curve $\Rightarrow D=1$. Area-filling $\Rightarrow D=2$.
+      A fractal boundary lives strictly between.
+      \smallskip
+      In practice: measure $N$ at a ladder of $\varepsilon$, and read $D$ off the
+      slope of $\log N$ vs $\log(1/\varepsilon)$.
+    \column{0.44\textwidth}
+      \begin{block}{\alert{Remember this for slide 11}}
+        $D\to2$ has \textbf{two} explanations:
+        \smallskip
+        \begin{enumerate}
+          \item a genuinely, intricately interwoven boundary --- the exciting one;
+          \item \textbf{a random labelling}, where every pixel borders another
+                colour, so the ``boundary'' fills the plane.
+        \end{enumerate}
+        \smallskip
+        Both give $D\approx2$ with a beautiful straight-line fit.
+        \textbf{$D$ alone cannot tell them apart.}
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{Plant the landmine explicitly and tell them you're planting it: "hold onto this, it
+detonates in slide 11." The failure mode and the triumph look identical in D. ~1.5 min.}
+
+% ═══════════════════════════════════════════════════ 7
+\begin{frame}{The Theorems We Lean On}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{block}{Uncertainty exponent \hfill {\normalfont Grebogi, McDonald, Ott \& Yorke (1983)}}
+    Perturb a random initial condition by $\varepsilon$ and ask how often the final
+    state changes. Let $f(\varepsilon)$ be that fraction of ``$\varepsilon$-uncertain''
+    points. Then $f(\varepsilon)\sim\varepsilon^{\alpha}$, and the boundary dimension
+    obeys
+    \[ \boxed{\;D = d - \alpha\;}\qquad (d=2\ \text{for our slice}) \]
+    \footnotesize
+    Interpretation: improving your precision by $10\times$ reduces your chance of
+    being wrong by only $10^{\alpha}$. As $\alpha\to0$ the boundary becomes
+    space-filling and extra precision buys nothing --- \emph{final-state sensitivity}.
+  \end{block}
+  \vspace{0.1cm}
+  \begin{block}{Basin entropy \hfill {\normalfont Daza, Wagemakers, Georgeot, Gu\'ery-Odelin \& Sanju\'an (2016)}}
+    Cover the map with $\varepsilon$-boxes. In box $i$, with basin frequencies
+    $p_{i,j}$, the Gibbs entropy is $S_i=-\sum_j p_{i,j}\ln p_{i,j}$. Average over
+    \emph{boundary} boxes to get $S_{bb}$. Then
+    \[ \boxed{\;S_{bb} > \ln 2 \;\Longrightarrow\; \text{the boundary is fractal}\;} \]
+    \footnotesize
+    A \emph{sufficient condition} --- a theorem, not a slope fit. This is where the
+    project should go next.
+  \end{block}
+\end{frame}
+\note{Two results that do real work. GMOY gives us D = d - alpha, so alpha near 0 means
+D near 2 means predictability collapses. Daza gives a *sufficient condition* for fractality
+that doesn't depend on fitting a line. Say out loud: a theorem beats a slope fit. ~1.5 min.}
+
+% ═══════════════════════════════════════════════════ 8
+\begin{frame}{The System I Study}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+      Each of $N=83$ brain regions is a chaotic \textbf{Lorenz} oscillator,
+      \[
+        \dot X=\sigma(Y-X),\quad \dot Y=X(\rho-Z)-Y,\quad \dot Z=XY-\beta Z
+      \]
+      with the classic chaotic parameters $\sigma=10,\ \rho=28,\ \beta=\tfrac83$.
+      \medskip
+
+      The regions are wired by a real human \textbf{DTI} scan. From its adjacency
+      matrix $A$ we build the graph Laplacian $L=\mathrm{diag}(A\mathbf{1})-A$
+      and couple through it:
+      \[
+        \boxed{\;\dot{\mathbf{x}}_i=f(\mathbf{x}_i)\;-\;K\sum_{j=1}^{N}L_{ij}\,H\mathbf{x}_j\;}
+      \]
+      \footnotesize
+      $H=e_1e_1^{\!\top}$ couples the $x$-components only; $K\ge0$ is the coupling
+      strength --- \textbf{the one knob I turn}.
+    \column{0.40\textwidth}
+      \begin{block}{The numbers}
+        \footnotesize
+        \begin{tabular}{ll}
+          \toprule
+          Regions $N$ & 83 \\
+          Edges & 850 \\
+          State space & $83\times3=249$ dims \\
+          Coupling $K$ & swept, $0 \to 0.65$ \\
+          \bottomrule
+        \end{tabular}
+      \end{block}
+      \begin{block}{Why Laplacian coupling}
+        \footnotesize
+        $L\mathbf{1}=\mathbf{0}$, so the fully synchronised state is \emph{always}
+        a solution, at every $K$. The question is whether it is the \emph{only}
+        one --- i.e.\ whether other attractors coexist.
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{The Laplacian point is worth 15 seconds: row sums are zero, so synchrony is always an
+exact solution. The interesting physics is whether anything ELSE survives alongside it.
+That framing makes the eventual "we only find one attractor" result meaningful rather than
+disappointing. ~1.5 min.}
+
+% ═══════════════════════════════════════════════════ 9
+\begin{frame}{What I Actually Built}
+  \GeoPanels
+  \vspace{0.3cm}
+  \begin{center}
+  \begin{tikzpicture}[
+      node distance=0.3cm and 0.4cm,
+      box/.style={draw=DarkBrown, fill=SandLight, rounded corners=3pt,
+                  minimum width=2.0cm, minimum height=0.95cm, align=center,
+                  font=\scriptsize, text=DarkBrown},
+      arr/.style={-{Stealth[length=5pt]}, Rust, line width=1pt}]
+    \node[box] (slice) {2-D slice\\of the 249-D\\state space};
+    \node[box, right=of slice] (grid) {$361^2=130{,}321$\\initial conditions};
+    \node[box, right=of grid] (int) {batched RK4\\on one GPU};
+    \node[box, right=of int] (vps) {fingerprint\\each run};
+    \node[box, below=of vps] (km) {cluster $\rightarrow$\\basin map};
+    \node[box, left=of km] (box) {box-count\\$\rightarrow D_f$};
+    \node[box, left=of box, fill=Ochre!35] (gate) {\textbf{is any of}\\\textbf{this real?}};
+    \draw[arr] (slice) -- (grid);
+    \draw[arr] (grid) -- (int);
+    \draw[arr] (int) -- (vps);
+    \draw[arr] (vps) -- (km);
+    \draw[arr] (km) -- (box);
+    \draw[arr] (box) -- (gate);
+  \end{tikzpicture}
+  \end{center}
+  \vspace{0.15cm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      {\footnotesize \textbf{The slice.} I cannot picture 249 dimensions, so I fix
+      all coordinates but two: perturb node 28 and node 79 along a
+      $[-9,9]\times[-9,9]$ grid. Each grid point is one full simulation.}
+    \column{0.48\textwidth}
+      {\footnotesize \textbf{Scale reached on ACRES.} 130{,}321 simulations per
+      coupling, integrated simultaneously; $\approx$1 GPU-hour per $K$; 20
+      couplings across $K\in[0.45,0.65]$, plus low-$K$ runs.}
+  \end{columns}
+\end{frame}
+\note{Walk the arrows once, one breath each. Flag that the last box — "is any of this real?" —
+is the part I added, and it's the whole second half of the talk. ~1 min.}
+
+% ═══════════════════════════════════════════════════ 10
+\begin{frame}{The Fingerprint --- and the Step That Cannot Say ``No''}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+      \textbf{The problem.} Two initial conditions on the \emph{same} chaotic
+      attractor produce completely different trajectories. So I cannot label a run
+      by comparing time series --- I need something \textbf{constant on an attractor}.
+      \medskip
+
+      \textbf{The fix (VPS).} For every pair of nodes $(i,j)$, take two
+      \emph{time-averaged} quantities: a phase-coherence measure and an amplitude
+      relation. Stack all $\binom{83}{2}=3403$ pairs:
+      \[ \mathbf{e}\in\mathbb{R}^{6806}\ \text{per initial condition.} \]
+      Time averages converge on an attractor $\Rightarrow$ same attractor, same
+      fingerprint. \checkmark
+    \column{0.42\textwidth}
+      \begin{block}{\alert{Then: $k$-means}}
+        Cluster the fingerprints; each cluster becomes one colour on the map.
+        \medskip
+        $k$-means \textbf{always returns exactly $k$ groups}. Hand it structureless
+        data and it does not object --- it hands back $k$ confident, meaningless
+        basins.
+        \medskip
+        \textbf{An estimator that cannot fail cannot be evidence.}
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{Two beats. VPS is legitimately clever and legitimately correct — time averages are
+attractor-invariant. The clustering step is where the trouble is, and it's not a coding bug,
+it's a conceptual one. ~1.5 min.}
+
+% ═══════════════════════════════════════════════════ 11
+\begin{frame}{The Number --- and the Picture Behind It}
   \GeoPanels
   \vspace{0.15cm}
   \begin{columns}[T]
-    \column{0.52\textwidth}
-      \begin{block}{How ``how many basins?'' was answered}
-        \footnotesize
-        The \textbf{elbow method}: cluster at each $k$, plot the within-cluster
-        error $W(k)$, find the ``corner'' where extra clusters stop helping.
-        Implemented via Kneedle: the point of maximum distance to the chord.
-      \end{block}
-      \begin{block}{Why that fails here}
-        \footnotesize
-        The corner only exists if the data \emph{has} well-separated groups. On a
-        near-degenerate blob, $W(k)$ decays \textbf{smoothly with no corner} ---
-        but Kneedle \alert{never abstains}. Given any convex curve it returns the
-        midpoint of the range.
-        \smallskip
-        \textbf{6--8 was an artifact of the search range $[2,15]$, not of the dynamics.}
-      \end{block}
     \column{0.44\textwidth}
-      \begin{block}{The deeper point}
-        \footnotesize
-        The number of attractors is a \textbf{topological fact} of the flow ---
-        fixed by the equations, changing only at bifurcations.
+      \begin{block}{What the pipeline reported}
+        Across the entire sweep $K\in[0.45,0.65]$:
+        \[ D_f\approx1.89\text{--}1.96,\qquad R^2>0.99 \]
+        so $\alpha=2-D_f\approx0.04$.
         \smallskip
-        $k$ is our \textbf{estimator} of it. Sweeping $k$ is legitimate
-        sensitivity analysis. Letting a broken heuristic pick $k$ and then
-        reporting its $D_f$ as physics is \textbf{measuring an artifact}.
+        Read straight off the theorem: near-total final-state sensitivity, an
+        intricately interwoven boundary. \textbf{Exactly the result the project
+        hoped for.}
+      \end{block}
+      \begin{block}{Two things that itched}
+        \footnotesize
+        $D_f$ was \textbf{flat in $K$} --- real bifurcation structure should move.
+        And the automatic basin-count chose \textbf{6--8} while the silhouette
+        criterion said \textbf{2}.
+      \end{block}
+    \column{0.52\textwidth}
+      \centering
+      \fig{basin_map_K065.png}{The basin map at $K=0.65$ --- the map that
+      $D_f\approx1.96$ was computed from.}
+    \end{columns}
+\end{frame}
+\note{Show the number. Let it sit for ten seconds as a win. Then turn to the figure and say
+nothing for a beat. It's pure static — no connected regions at ANY scale. Then the line:
+"a basin map with no connected regions is not a basin map." This is the hinge of the talk. ~2 min.}
+
+% ═══════════════════════════════════════════════════ 12
+\begin{frame}{Hypothesis}
+  \GeoPanels
+  \vspace{0.35cm}
+  \begin{block}{H}
+    \centering\normalsize
+    \textbf{$D_f\approx1.9$ is not measuring a fractal boundary. It is what
+    box-counting returns when a clustering is \emph{imposed} on features that do
+    not separate.}
+  \end{block}
+  \vspace{0.25cm}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \begin{block}{The mechanism}
+        \footnotesize
+        If the labels are pixel-level noise, then \emph{every} pixel borders
+        another colour. The boundary is space-filling, so
+        \[ D_f\to 2,\qquad \alpha = 2-D_f \to 0. \]
+        We measured $D_f\approx1.96,\ \alpha\approx0.04$. That is not evidence
+        \emph{for} an interwoven boundary --- it is \textbf{equally} the signature
+        of noise.
+      \end{block}
+    \column{0.50\textwidth}
+      \begin{block}{Four predictions, if H is true}
+        \footnotesize
+        \begin{description}\setlength\itemsep{2pt}
+          \item[P1] the basin-count selector is fitting a knee that does not exist
+          \item[P2] the VPS features contain no separable structure
+          \item[P3] a method \emph{allowed} to answer ``one attractor'' will answer one
+          \item[P4] an \textbf{independent} descriptor will agree
+        \end{description}
       \end{block}
   \end{columns}
 \end{frame}
-\note{"The number of attractors is a fact about the equations, not a knob." That line is the
-intellectual centre of the talk. The elbow doesn't measure it — it always answers, even when
-the honest answer is 'there's nothing here.' ~1.5 min.}
+\note{This slide is why this is science and not just debugging. A falsifiable claim, four
+predictions that could each have come out the other way. Slow down here. ~1.5 min.}
 
-% ══════════════════════════════════════════════════════════════════════
+% ═══════════════════════════════════════════════════ 13
+\begin{frame}{P1 --- The Elbow Fits a Corner That Isn't There}
+  \GeoPanels
+  \vspace{0.2cm}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+      \textbf{How ``how many basins?'' was being answered.} Cluster at each $k$;
+      let $W(k)$ be the within-cluster sum of squares. $W$ always decreases, so you
+      cannot minimise it --- instead find the ``corner'' of diminishing returns
+      (Kneedle: the point farthest from the chord joining the endpoints).
+      \medskip
+
+      \textbf{Why it fails.} A corner exists only if the data \emph{has}
+      well-separated groups. On a near-degenerate cloud, $W(k)$ decays smoothly
+      with no corner --- but Kneedle \alert{never abstains}. Given any convex
+      decreasing curve it returns a point in the middle of the search range.
+      \medskip
+
+      {\color{Rust}\textbf{So ``6--8 basins'' was a fact about the range $[2,15]$,
+      not about the brain.}}
+    \column{0.42\textwidth}
+      \begin{block}{The conceptual error}
+        The number of attractors is fixed by the vector field. It changes only at
+        bifurcations. It is not ours to choose.
+        \medskip
+        $k$ is an \textbf{estimator} of that integer. Sweeping $k$ is honest
+        sensitivity analysis. Letting a broken heuristic pick $k$ and then
+        reporting the resulting $D_f$ as physics is \textbf{measuring an artifact}.
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{"The elbow always answers, even when the honest answer is 'there's nothing here.'"
+Tie back to slide 5: the count is a fact about the equations. ~1.5 min.}
+
+% ═══════════════════════════════════════════════════ 14
 \begin{frame}{P2 --- Building a Test That \emph{Can} Say ``Nothing Here''}
   \GeoPanels
   \vspace{0.15cm}
   \begin{columns}[T]
-    \column{0.52\textwidth}
-      \begin{block}{The gate}
-        \footnotesize
-        Compare the best clustering achievable on the \textbf{real} features
-        against the best achievable on a \textbf{structureless reference} with the
-        same shape (a covariance-matched Gaussian --- unimodal by construction).
-        \smallskip
-        Report the \textbf{effect size}, and only count \textbf{balanced}
-        partitions (a split that isolates 5 outliers is not a basin).
-      \end{block}
-      \begin{block}{\alert{Hard-won: three of my own bugs}}
-        \footnotesize
-        The first version was \textbf{wrong}: a shuffled null scored 0.94 (should
-        be $\approx0$), and it declared ``structure'' on margins of 0.018. Causes:
-        outliers dominating; a shape-mismatched null; and a threshold \emph{smaller
-        than the statistic's own scatter}.
-      \end{block}
+    \column{0.53\textwidth}
+      \textbf{The statistic.} Let $s^\star$ be the best clustering quality
+      (silhouette) achievable on the real features, and compare it to the same
+      quantity on a \textbf{structureless reference} $Z$ drawn from a single
+      Gaussian matched to the data's own mean and covariance:
+      \[ \Delta \;=\; s^\star_{\text{real}} \;-\; Q_{95}\big(s^\star_{Z}\big) \]
+      Declare structure only if $\Delta\ge$ margin. The reference is
+      \textbf{unimodal by construction} but has the real elliptical spread --- so
+      genuine basins must beat ``one blob,'' not a strawman.
+      \medskip
+
+      Only \textbf{balanced} partitions count: a split isolating five outlier
+      points is not a basin.
     \column{0.44\textwidth}
-      \begin{block}{Validated on ground truth}
+      \begin{block}{Validated where I know the answer}
         \centering\footnotesize
         \begin{tabular}{lcc}
           \toprule
-          Synthetic input & effect & verdict \\
+          synthetic input & $\Delta$ & verdict \\
           \midrule
-          3 real clusters & $+0.38$ & \textbf{$k=3$} \checkmark \\
-          1 blob & $-0.01$ & none \checkmark \\
+          3 real clusters & $+0.38$ & $k=3$ \checkmark \\
+          one blob & $-0.01$ & none \checkmark \\
           blob $+$ outliers & $-0.26$ & none \checkmark \\
           heavy-tailed blob & $-0.00$ & none \checkmark \\
           \bottomrule
         \end{tabular}
         \par\smallskip
         {\footnotesize On one-blob data the null reproduces the data's own score
-        (effect $\approx0$); real structure clears it by $+0.38$. \textbf{A
-        calibrated test.}}
+        ($\Delta\approx0$); real structure clears it by $+0.38$.}
+      \end{block}
+      \begin{block}{\alert{Three of my own bugs}}
+        \footnotesize
+        My first version was \emph{wrong}: its null scored $0.94$ where it should
+        have scored $\approx0$, and it declared ``structure'' on margins of
+        $0.018$. I only caught it by testing on data with known answers.
       \end{block}
   \end{columns}
 \end{frame}
-\note{Be proud of this slide, and be honest: my first three attempts at this test were broken,
-and I only found out because I validated against data where I KNEW the answer. That's the
-lesson — build the ruler before you trust the measurement. ~2 min.}
+\note{Own the bugs out loud — it's the most credible thing in the talk. Outliers dominated;
+the reference had the wrong shape; and the threshold was smaller than the statistic's own
+run-to-run scatter. Lesson: build the ruler, and check the ruler, before trusting the
+measurement. ~2 min.}
 
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{P3 \& P4 --- Two Independent Counts, Neither Finds Basins}
+% ═══════════════════════════════════════════════════ 15
+\begin{frame}{P3 \& P4 --- Two Independent Counts}
   \GeoPanels
   \vspace{0.15cm}
   \begin{columns}[T]
-    \column{0.50\textwidth}
-      \begin{block}{P3: let the count \emph{emerge} (DBSCAN)}
+    \column{0.49\textwidth}
+      \begin{block}{P3 --- let the count emerge}
         \footnotesize
-        Density-based, outlier-robust, and \textbf{allowed to answer 1}.
-        Run on the saved VPS features of all 20 couplings:
+        Density-based clustering (DBSCAN): groups are dense regions separated by
+        sparse ones. It is outlier-robust and \textbf{allowed to answer one}.
+        Run on the saved features of all 20 couplings:
         \smallskip
-        \centering\textbf{1 attractor at every $K$} \\
-        {\footnotesize (radius-stable in 18/20; $K{=}0$ uncoupled control
-        correctly returns 1)}
+        \centering\textbf{one attractor at every $K$}\\
+        {\scriptsize stable in 18/20; the $K=0$ uncoupled control correctly returns 1}
       \end{block}
-      \begin{block}{P4: a VPS-free descriptor}
+      \begin{block}{P4 --- throw away VPS entirely}
         \footnotesize
-        Re-integrated 7 couplings on the GPU and counted from
-        \textbf{final-state statistics} --- no VPS, no k-means, no silhouette.
-        Shares \emph{nothing} with the pipeline above.
+        Re-integrated 7 couplings and counted from \textbf{final-state statistics}
+        instead: no VPS, no $k$-means, no silhouette. Shares \emph{no machinery}
+        with everything above.
       \end{block}
-    \column{0.46\textwidth}
-      \begin{block}{\alert{What P4 actually returned}}
+    \column{0.47\textwidth}
+      \begin{block}{\alert{P4 did not confirm P3}}
         \centering\footnotesize
         \begin{tabular}{lcc}
           \toprule
-          $K$ & count & radius scan \\
+          $K$ & count & count as radius grows \\
           \midrule
-          0.00 & 1 & 2 : 1 : 1 \\
-          0.10 & 1 & 38 : 1 : 1 \\
-          0.20 & 39 & 47 : 39 : 2 \\
-          0.45 & 6 & 64 : 6 : 2 \\
-          0.65 & 11 & 45 : 11 : 5 \\
+          0.00 & 1 & 2 $\to$ 1 $\to$ 1 \\
+          0.10 & 1 & 38 $\to$ 1 $\to$ 1 \\
+          0.20 & 39 & 47 $\to$ 39 $\to$ 2 \\
+          0.45 & 6 & 64 $\to$ 6 $\to$ 2 \\
+          0.65 & 11 & 45 $\to$ 11 $\to$ 5 \\
           \bottomrule
         \end{tabular}
         \par\smallskip
-        {\footnotesize \textbf{Not one stable count.} A 2$\times$ change in the
-        threshold moves the answer from 64 to 2. Real attractors give a
-        \textbf{plateau}; this is a \textbf{continuum}. The numbers are artifacts
-        of where the threshold landed --- so I report \emph{none} of them.}
+        {\footnotesize \textbf{Not one stable count.} Doubling the threshold moves
+        the answer from 64 to 2. Well-separated attractors would hold a
+        \textbf{plateau} --- real density gaps don't care about your threshold.
+        There is none. This is a \textbf{continuum}, so I report \emph{none} of
+        these numbers.}
       \end{block}
   \end{columns}
 \end{frame}
-\note{Don't spin P4 as confirmation — it isn't. It DISAGREES with P3 on the numbers while
-agreeing there's nothing robust to find. Say that plainly. The honest summary: two independent
-methods, neither finds well-separated basins. ~2 min.}
+\note{Be scrupulous here: P4 DISAGREES with P3 on the numbers. What they agree on is that
+there's nothing robust to find. Don't oversell. The plateau argument is the honest reading,
+and it's why I refuse to put "39 attractors" on a slide. ~2 min.}
 
-% ══════════════════════════════════════════════════════════════════════
+% ═══════════════════════════════════════════════════ 16
 \begin{frame}{The Result}
   \GeoPanels
   \vspace{0.25cm}
   \begin{block}{What I can defend}
     \centering
-    \textbf{In these 2-D slices of the DTI-coupled Lorenz network, across
-    $K\in[0,0.65]$, the data do not support multiple coexisting basins.\\
-    The reported $D_f\approx1.9$ is the signature of box-counting a
-    \emph{partition of noise}, not of a fractal boundary.}
+    \textbf{In these 2-D slices of the DTI-coupled Lorenz network, for
+    $K\in[0,0.65]$, the data do not support multiple coexisting basins. The
+    reported $D_f\approx1.9$ is the signature of box-counting a \emph{partition of
+    noise}.}
   \end{block}
   \vspace{0.15cm}
   \begin{columns}[T]
-    \column{0.48\textwidth}
+    \column{0.47\textwidth}
       \begin{block}{Converging evidence}
         \footnotesize
         \begin{itemize}\setlength\itemsep{1pt}
-          \item basin map has \textbf{no connected regions} at any scale
-          \item $D_f$ \textbf{flat} across $K$ --- no bifurcation signature
-          \item $D_f\to2,\ \gamma\to0$ --- the space-filling fingerprint
-          \item emergent counting: \textbf{1}, not 6--8
-          \item independent descriptor: \textbf{no plateau} at any $K$
-          \item $K{=}0$ control behaves correctly
+          \item the basin map has no connected regions at any scale
+          \item $D_f$ is flat in $K$ --- no bifurcation signature
+          \item $D_f\to2$, $\alpha\to0$: the space-filling fingerprint
+          \item emergent counting says \textbf{one}, not 6--8
+          \item an independent descriptor finds \textbf{no plateau} at any $K$
+          \item the $K=0$ control behaves correctly
         \end{itemize}
       \end{block}
-    \column{0.48\textwidth}
-      \begin{block}{\alert{What I am NOT claiming}}
+    \column{0.49\textwidth}
+      \begin{block}{\alert{What I am not claiming}}
         \footnotesize
         \begin{itemize}\setlength\itemsep{1pt}
-          \item \textbf{Not} that fractal basins don't exist --- Bollt \& Fish's
-                mechanism is untouched by this
-          \item \textbf{Not} a claim about other models or other slices
-          \item Absence of evidence: the VPS features may simply fail to
-                \emph{resolve} attractors that are there
-          \item These are 2-D slices of a 249-D space --- one slice may intersect
-                only one basin
+          \item \textbf{Not} that fractal basins don't exist. The Bollt--Fish
+                mechanism is untouched by this.
+          \item \textbf{Not} a statement about other models, other slices, other
+                couplings.
+          \item This is \textbf{absence of evidence}: VPS may simply fail to
+                \emph{resolve} attractors that are there.
+          \item A 2-D slice through a 249-D space may intersect only one basin.
         \end{itemize}
       \end{block}
   \end{columns}
 \end{frame}
-\note{Land this slowly. The claim is narrow and defensible. The "not claiming" column is
-half the slide on purpose — it's what makes the first column credible. If someone pushes:
-"I'm reporting what this measurement can and cannot support, not overturning the theory." ~2 min.}
+\note{Land it slowly. The right-hand column is half the slide on purpose — the narrowness of
+the claim is what makes it credible. If challenged: "I'm reporting what this measurement can
+and cannot support. I'm not overturning the theory." ~2 min.}
 
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{Why This Matters Beyond One Sweep}
+% ═══════════════════════════════════════════════════ 17
+\begin{frame}{What I Did, in Plain Terms}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.3cm}
   \begin{columns}[T]
-    \column{0.50\textwidth}
-      \begin{block}{The failure mode is general}
-        \footnotesize
-        Any pipeline of the form
-        \smallskip
-        \centering\texttt{cluster $\to$ box-count $\to$ report $D$}
-        \smallskip
-        \raggedright
-        can produce a confident $D\approx2$ from pure noise, because:
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item the clusterer cannot abstain,
-          \item and $D\to2$ looks like a \emph{triumph} (``maximally interwoven!'')
-                rather than a failure.
-        \end{itemize}
-        \textbf{The more broken it is, the better the headline looks.}
+    \column{0.48\textwidth}
+      \textbf{Built}
+      \begin{itemize}\setlength\itemsep{3pt}
+        \item A GPU pipeline that simulates 130{,}321 brain-network runs at once.
+        \item A way to re-analyse finished runs \emph{without} re-simulating ---
+              the raw features are saved, so re-testing is free.
+        \item Three referees: \emph{is there structure?}, \emph{how many
+              attractors?}, \emph{is that count robust?}
+        \item Random-network comparisons (Erd\H{o}s--R\'enyi, Watts--Strogatz,
+              Barab\'asi--Albert) wired in and running.
+      \end{itemize}
+    \column{0.48\textwidth}
+      \textbf{Found}
+      \begin{itemize}\setlength\itemsep{3pt}
+        \item The basin map behind $D_f\approx1.9$ is static, not structure.
+        \item The basin count was set by a heuristic that always answers.
+        \item Every referee that \emph{could} say ``nothing here'' said it.
+        \item My own first referee was broken --- caught by testing it against
+              known answers.
+      \end{itemize}
+      \medskip
+      {\footnotesize\color{Rust} Every diagnostic above was validated on synthetic
+      data with a known answer before it was allowed near the real data.}
+  \end{columns}
+\end{frame}
+\note{This is the "what did you actually do all summer" slide, in words your grandmother
+could follow. If you only remember one framing: I built the tool, it told me what I wanted to
+hear, and I refused to believe it until it survived tests that could have killed it. ~1 min.}
+
+% ═══════════════════════════════════════════════════ 18
+\begin{frame}{Why This Generalises}
+  \GeoPanels
+  \vspace{0.4cm}
+  \begin{center}
+    Any pipeline shaped like\\[0.3cm]
+    {\large\ttfamily cluster $\longrightarrow$ box-count $\longrightarrow$ report $D$}\\[0.3cm]
+    can turn pure noise into a confident $D\approx2$.
+  \end{center}
+  \vspace{0.3cm}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      \begin{block}{Because}
+        the clusterer cannot abstain --- and $D\to2$ \emph{reads} as a triumph
+        (``maximally interwoven!'') rather than as a failure.
       \end{block}
-    \column{0.46\textwidth}
-      \begin{block}{The deliverable}
-        \footnotesize
-        A \textbf{gate} that must pass before any $D_f$, basin entropy, or Wada
-        number is reported:
-        \begin{enumerate}\setlength\itemsep{1pt}
-          \item is there separable structure? (calibrated null, effect size)
-          \item how many attractors, allowed to be 1? (emergent count)
-          \item is that count robust? (radius plateau)
-        \end{enumerate}
-        \smallskip
-        All validated against synthetic data with \textbf{known} answers.
+    \column{0.47\textwidth}
+      \begin{block}{So the gate must come first}
+        Structure test $\to$ emergent count $\to$ robustness check. Only then is
+        a $D_f$, a basin entropy, or a Wada result worth reporting.
       \end{block}
   \end{columns}
   \vfill
-  \centering{\footnotesize\color{Rust}\textbf{The scariest bug is the one that
-  makes your result look better.}}
+  \centering{\color{Rust}\textbf{The most dangerous bug is the one that makes your
+  result look better.}}
 \end{frame}
-\note{This is the generalisable contribution and the line to end the technical section on.
-A pipeline that can't say "nothing here" will always find something. ~1.5 min.}
+\note{The transferable lesson, and the strongest line in the talk. Land the last sentence and
+pause. ~1 min.}
 
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{The Software}
+% ═══════════════════════════════════════════════════ 19
+\begin{frame}{Next --- and the Honest Open Question}
   \GeoPanels
-  \vspace{0.15cm}
-  \begin{block}{\texttt{pythongpu} --- model-agnostic basin mapping \emph{with} its own referee}
-    \footnotesize
-    \begin{columns}[T]
-      \column{0.5\textwidth}
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \textbf{oscillators/} Lorenz, R\"ossler, Kuramoto, Hindmarsh--Rose, Van der Pol, FitzHugh--Nagumo, Chua
-          \item \textbf{networks/} DTI connectome $+$ ER / Watts--Strogatz / Barab\'asi--Albert null models
-          \item \textbf{processing/} box-counting, basin entropy, causation entropy, multifractal, chimera classifier
-        \end{itemize}
-      \column{0.5\textwidth}
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \textbf{diagnostics} \alert{(new)} structure gate, emergent attractor count, radius-plateau test
-          \item GPU-vectorised; SLURM job arrays for ACRES
-          \item \texttt{pytest} suite; every diagnostic validated on known-answer data
-        \end{itemize}
-    \end{columns}
-  \end{block}
-  \vfill
-  \centering\footnotesize
-  \texttt{github.com/anitoti/pythongpu}
-\end{frame}
-\note{Deliverable framing: infrastructure others can reuse, and — the part I'd argue matters
-most — it now refuses to report numbers it can't support. ~45 sec.}
-
-% ══════════════════════════════════════════════════════════════════════
-\begin{frame}{Where This Goes Next}
-  \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.2cm}
   \begin{columns}[T]
     \column{0.48\textwidth}
-      \begin{block}{Immediate --- resolve the ambiguity}
-        \footnotesize
-        Is it ``no basins'' or ``VPS can't see them''? Distinguish by:
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item richer descriptors: the \textbf{synchronisation pattern} (which
-                nodes lock to which), not just amplitude statistics
-          \item other 2-D slices / other node pairs --- one slice may miss the
-                multistability entirely
-          \item \textbf{lower coupling}: the only $K$ with any real signal was at
-                the low edge of the sweep
-        \end{itemize}
+      \begin{block}{The question I could not settle}
+        Is it ``\textbf{no basins}'' or ``\textbf{VPS cannot see them}''?
+        \smallskip
+        My final-state descriptor uses per-node amplitude statistics. It may
+        under-separate attractors that differ by \emph{which nodes synchronise
+        with which} rather than by amplitude. That is the first thing to fix.
       \end{block}
     \column{0.48\textwidth}
-      \begin{block}{Then --- the questions worth asking}
+      \begin{block}{The route forward}
         \footnotesize
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item \textbf{Basin entropy} $S_{bb}>\ln 2$: a \emph{sufficient
-                condition} for fractality --- a theorem, not a slope fit
-          \item \textbf{Null models} (ER/WS/BA, now wired up): is it brain wiring,
-                or any comparable graph?
-          \item \textbf{Transverse Lyapunov exponents}: explains \emph{why} the
-                basins look as they do, rather than describing them
+        \begin{itemize}\setlength\itemsep{2pt}
+          \item \textbf{Basin entropy}: test $S_{bb}>\ln2$ --- a sufficient
+                condition, so a \emph{theorem} rather than a slope fit
+          \item \textbf{Lower coupling} and other slices --- the only hint of real
+                signal sat at the low edge of the sweep
+          \item \textbf{Null models} (ER / WS / BA, already wired): is it brain
+                wiring, or any comparable graph?
+          \item \textbf{Transverse Lyapunov exponents} and the master stability
+                function: explain \emph{why} the geometry is what it is
         \end{itemize}
       \end{block}
   \end{columns}
+  \vfill
+  \centering{\footnotesize The pipeline and the referees are built and validated ---
+  the next student inherits a tool that argues back.}
 \end{frame}
-\note{Show you know exactly what the next experiment is. The sync-pattern descriptor is the
-real one — my current descriptor may under-separate attractors that differ by WHO syncs with
-WHOM rather than by amplitude. That's the honest limitation and the obvious next step. ~1 min.}
+\note{Show you know exactly what experiment comes next and why. The sync-pattern descriptor
+is the real gap, and naming your own limitation before the audience does is how you keep
+their trust. ~1 min.}
 
-% ══════════════════════════════════════════════════════════════════════
+% ═══════════════════════════════════════════════════ 20
 \begin{frame}{Summary}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.2cm}
   \begin{columns}[T]
-    \column{0.54\textwidth}
-      \textbf{This summer:}
-      \begin{itemize}\setlength\itemsep{4pt}
-        \item[\textcolor{Olive}{$\checkmark$}] Built a GPU basin-mapping pipeline on ACRES ($361^2$ ICs $\times$ 6806 features $\times$ 20 couplings)
-        \item[\textcolor{Olive}{$\checkmark$}] It reported $D_f\approx1.9$ --- the headline the project wanted
-        \item[\textcolor{Rust}{$\bullet$}] \textbf{Proved that number was an artifact} of imposed clustering, with converging evidence from independent methods
-        \item[\textcolor{Olive}{$\checkmark$}] Built \& validated the diagnostics that catch this class of error
-        \item[\textcolor{Ochre}{$\circ$}] Richer descriptors, null models, basin entropy --- next
+    \column{0.55\textwidth}
+      \begin{itemize}\setlength\itemsep{5pt}
+        \item[\textcolor{Olive}{$\checkmark$}] Built a GPU basin-mapping pipeline on ACRES:
+              $361^2$ initial conditions, 6806 features each, 20 couplings.
+        \item[\textcolor{Olive}{$\checkmark$}] It produced $D_f\approx1.9$ --- the
+              headline the project wanted.
+        \item[\textcolor{Rust}{$\bullet$}] \textbf{Showed that number is an artifact}
+              of imposed clustering, with converging evidence from methods that
+              share no machinery.
+        \item[\textcolor{Olive}{$\checkmark$}] Built and validated the diagnostics
+              that catch this class of error.
+        \item[\textcolor{Ochre}{$\circ$}] Richer descriptors, $S_{bb}$, null models --- next.
       \end{itemize}
-    \column{0.42\textwidth}
+    \column{0.41\textwidth}
       \begin{block}{Takeaway}
-        A measurement pipeline that \textbf{cannot fail} isn't measuring anything.
+        A measurement that \textbf{cannot fail} is not a measurement.
         \smallskip
-        The fractal-basin hypothesis deserves a test that could have said no ---
-        so I built one. \textbf{This dataset says: not here, not yet.}
+        The fractal-basin hypothesis deserves a test that could have said no.
+        I built one. \textbf{On this dataset it says: not here, not yet.}
       \end{block}
   \end{columns}
   \vfill
-  \centering{\small\color{DarkBrown}\emph{``The scariest bug is the one that makes your result look better.''}}
+  \centering{\small\emph{``The most dangerous bug is the one that makes your result look better.''}}
 \end{frame}
-\note{Recap in one breath: built it, it gave the desired answer, I didn't trust it, I proved
-it wrong, and I built the referee. End on the one-liner. Then: "Thank you — questions." ~1 min.}
+\note{One breath: built it, it flattered me, I didn't buy it, I proved it wrong, I built the
+referee. Then: thank you, questions. Leave 2–3 min. ~1 min.}
 
-% ══════════════════════════════════════════════════════════════════════
+% ═══════════════════════════════════════════════════ 21
 \begin{frame}[plain]
   \begin{tikzpicture}[overlay, remember picture]
     \fill[DarkBrown] (current page.south west) rectangle (current page.north east);
@@ -712,7 +836,7 @@ it wrong, and I built the referee. End on the one-liner. Then: "Thank you — qu
   \begin{columns}[c]
     \column{0.08\textwidth}
     \column{0.9\textwidth}
-      {\usebeamerfont{title}\color{Cream}\bfseries Thank you!\par}
+      {\usebeamerfont{title}\color{Cream}\bfseries Thank you\par}
       \vspace{0.3cm}
       {\color{SandLight} Questions welcome.\par}
       \vspace{0.5cm}
