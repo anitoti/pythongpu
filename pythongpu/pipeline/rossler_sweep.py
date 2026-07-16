@@ -12,7 +12,7 @@ output artefacts and file names — with the Lorenz-63 vector field swapped
 for the canonical chaotic Rössler flow.
 
 Pipeline (mirrors lorenz_sweep.py exactly):
-  1. Load DTI_A.mat structural connectivity, build the graph Laplacian.
+  1. Load DTI-og.mat structural connectivity (professor original), build the graph Laplacian.
   2. Sweep a 2-D affine slice of the high-dimensional IC space.
   3. Integrate each IC forward with RK4 (explicit transient burn-in).
   4. Stream VPS features via Welford online mean/variance — no OOM.
@@ -36,7 +36,7 @@ Run:
     python3 -m pythongpu.pipeline.rossler_sweep
     python3 -m pythongpu.pipeline.rossler_sweep \
         --grid-n 64 --coupling 0.5 \
-        --dti-path data/DTI_A.mat \
+        --dti-path data/DTI-og.mat \
         --outdir /home/atotilca/pythongpu/data/rossler/
 """
 
@@ -394,7 +394,7 @@ def main():
         help="Boxdiv2 survival probability.")
     ap.add_argument("--rewire-n",   type=int,   default=5,
         help="Edges to rewire in perturbation demo.")
-    ap.add_argument("--dti-path",   type=str,   default="data/DTI_A.mat",
+    ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat", 
         help="Path to DTI_A.mat structural connectivity matrix.")
     ap.add_argument("--outdir",     type=str,   default=".",
         help="Output directory for all files.")

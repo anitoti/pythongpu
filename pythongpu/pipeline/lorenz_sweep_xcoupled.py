@@ -7,10 +7,10 @@ Date   : summer 2026
 Project: Nimble Brain — Clarkson University REU (Dr. Jeremie Fish)
 
 Pipeline:
-  1. Load DTI_A.mat structural connectivity matrix via scipy.io.loadmat.
+  1. Load DTI-og.mat (professor original) structural connectivity matrix via scipy.io.loadmat.
      Symmetrise, zero diagonal, build weighted graph Laplacian.
      [Page 28, full_.m_script.pdf:
-      "load('DTI_A.mat') A = double(A); n = size(A,2);
+      "load('DTI-og.mat') A = double(A); n = size(A,2);
        L = diag(sum(A,2)) - A; gel = 0.5;
        H = [0 0 0; 0 1 0; 0 0 0]; gelLH = gel*kron(L,H)"]
 
@@ -52,7 +52,7 @@ Run:
     python3 pipeline/lorenz_sweep_xcoupled.py
     python3 pipeline/lorenz_sweep_xcoupled.py \
         --grid-n 64 --coupling 0.5 \
-        --dti-path data/DTI_A.mat \
+        --dti-path data/DTI-og.mat \
         --outdir /home/atotilca/pythongpu/data/
 """
 
@@ -297,7 +297,7 @@ def main():
     ap.add_argument("--k-clusters", type=int,   default=5)
     ap.add_argument("--boxdiv-p",   type=float, default=0.7)
     ap.add_argument("--rewire-n",   type=int,   default=5)
-    ap.add_argument("--dti-path",   type=str,   default="data/DTI_A.mat")
+    ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat")
     ap.add_argument("--outdir",     type=str,   default=".")
     args = ap.parse_args()
 

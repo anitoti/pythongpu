@@ -1,6 +1,6 @@
 """
 Desikan-Killiany region nomenclature for the 83-node structural connectome
-(``data/DTI_A.mat``).
+(``data/DTI-og.mat``).
 
 The empirical adjacency shipped in ``DTI_A.mat`` is an 83 x 83 symmetric binary
 matrix. Eighty-three regions is the canonical cardinality of the Lausanne-2008

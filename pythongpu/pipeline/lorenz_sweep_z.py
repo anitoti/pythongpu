@@ -27,7 +27,7 @@ Run:
     python3 pipeline/lorenz_sweep_z.py
     python3 pipeline/lorenz_sweep_z.py \
         --grid-n 64 --coupling 0.5 \
-        --dti-path data/DTI_A.mat \
+        --dti-path data/DTI-og.mat \
         --outdir /home/atotilca/pythongpu/data/
 """
 
@@ -276,7 +276,7 @@ def main():
     ap.add_argument("--k-clusters", type=int,   default=5)
     ap.add_argument("--boxdiv-p",   type=float, default=0.7)
     ap.add_argument("--rewire-n",   type=int,   default=5)
-    ap.add_argument("--dti-path",   type=str,   default="data/DTI_A.mat")
+    ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat")
     ap.add_argument("--outdir",     type=str,   default=".")
     args = ap.parse_args()
 

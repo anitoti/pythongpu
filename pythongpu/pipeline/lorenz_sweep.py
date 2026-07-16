@@ -476,8 +476,8 @@ def main():
         help="Boxdiv2 survival probability.")
     ap.add_argument("--rewire-n",   type=int,   default=5,
         help="Edges to rewire in perturbation demo.")
-    ap.add_argument("--dti-path",   type=str,   default="data/DTI_A.mat",
-        help="Path to DTI_A.mat. "
+    ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat",
+        help="Path to DTI-og.mat (professor original DTI). "
              "[Page 28, full_.m_script.pdf: \"load('DTI_A.mat')\"]")
     ap.add_argument("--outdir",     type=str,   default=".",
         help="Output directory for all files.")
@@ -487,9 +487,9 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[device]   {device}")
 
-    # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+    # ── load DTI-og.mat (professor original) and build Laplacian ───────────────────────────────
     # [Page 28, full_.m_script.pdf:
-    #  "load('DTI_A.mat') A = double(A); n = size(A,2);
+    #  "load('DTI-og.mat') A = double(A); n = size(A,2);
     #   L = diag(sum(A,2)) - A; gel = 0.5;
     #   H = [0 0 0; 0 1 0; 0 0 0]; gelLH = gel*kron(L,H)"]
     L_gpu, n_dti = load_dti_laplacian(args.dti_path, device)

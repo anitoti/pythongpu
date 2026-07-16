@@ -32,7 +32,7 @@ export PYTHONPATH=$SLURM_SUBMIT_DIR
 
 echo "Launching Van der Pol coupling sweep on subject 01 structural connectome..."
 python3 -m pythongpu.pipeline.vdp_sweep \
-    --dti-path data/DTI_A.mat \
+    --dti-path data/DTI-og.mat \
     --mu 1.5 \
     --coupling-min 0.0 \
     --coupling-max 1.0 \
