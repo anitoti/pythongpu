@@ -32,6 +32,8 @@ pythongpu-correlate-fmri = "pythongpu.networks.fmri_loader:main"
 pythongpu-plot-matrix = "pythongpu.visualization.plot_matrix:main"
 pythongpu-inspect = "pythongpu.pipeline.inspect_data:main"
 pythongpu-sparse-brain-sim = "pythongpu.pipeline.sparse_brain_sim:main"
+pythongpu-dti-register = "pythongpu.pipeline.register_dti_cli:main"
+pythongpu-clv = "pythongpu.pipeline.clv_cli:main"
 
 # Flat layout: the importable package `pythongpu` lives at the repo root, so
 # `import pythongpu` works from the repo root with no install and no

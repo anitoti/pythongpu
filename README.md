@@ -57,6 +57,37 @@ from pythongpu.oscillators.lorenz import LorenzNetwork
 from pythongpu.processing.multifractal_analysis import run
 ```
 
+## DTI data registration and spectral index (new)
+
+This repository distinguishes raw binary data (kept in `data/` and **git-ignored**) from reproducible derived metadata that is recorded and tracked in the codebase. The workflow below standardises DTI filenames, computes spectral diagnostics once per unique matrix, and records the results in a tracked JSON index so downstream tests and analyses can reliably reuse precomputed results.
+
+1) Register a DTI matrix with a human-readable tag (recommended):
+
+    python3 scripts/register_dti.py --src /path/to/DTI.mat --tag og --move --compute
+
+This will copy the file to `data/DTI-og.mat` (or `data/DTI-<tag>.mat`) and optionally run the spectral diagnostics. Use `--move` to move instead of copy. If the filename already exists and the content differs, a timestamp suffix is appended.
+
+2) Spectral diagnostics and index
+
+Run the diagnostics (the registration script can do this for you), or run directly:
+
+    python3 scripts/run_dti_spectral.py --mat data/DTI-og.mat --outdir output/dti_og
+
+What the diagnostics do:
+- Preprocess: symmetrise adjacency, zero diagonal
+- Compute: adjacency, Laplacian, normalized Laplacian eigenpairs
+- Robust k-selection: eigengap candidate + silhouette sweep
+- Spectral clustering (KMeans on Laplacian eigenvectors)
+- Quality metrics: silhouette score, modularity (networkx)
+- Outputs: eigenvalues/eigenvectors (npy/txt), cluster labels, plots, PDF report
+- Indexing: compute SHA256 fingerprint of the matrix and record a structured summary in `dti_spectra_index.json` at the repo root (tracked by git)
+
+The index prevents repeated work: a matrix with the same SHA256 is considered identical and its stored entry is used by downstream tests/pipelines unless recompute is explicitly requested (`--force`).
+
+3) Inspecting results
+
+- `dti_spectra_index.json` lists indexed matrices with their diagnostics and outputs. Use it to drive tests or skip reprocessing when running pipelines on many matrices.
+
 ## Tests
 
 ```bash

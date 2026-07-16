@@ -2,7 +2,7 @@
 Desikan-Killiany region nomenclature for the 83-node structural connectome
 (``data/DTI-og.mat``).
 
-The empirical adjacency shipped in ``DTI_A.mat`` is an 83 x 83 symmetric binary
+The empirical adjacency shipped in ``DTI-og.mat`` is an 83 x 83 symmetric binary
 matrix. Eighty-three regions is the canonical cardinality of the Lausanne-2008
 "scale 33" parcellation (Cammoun et al., 2012; Hagmann et al., 2008), which is
 constructed directly from the FreeSurfer Desikan-Killiany cortical atlas
@@ -16,7 +16,7 @@ constructed directly from the FreeSurfer Desikan-Killiany cortical atlas
 
 IMPORTANT — ORDERING ASSUMPTION
 -------------------------------
-``DTI_A.mat`` carries no region lookup table (the .mat exposes only the raw
+``DTI-og.mat`` carries no region lookup table (the .mat exposes only the raw
 variable ``A``), so the index -> label association below is an *assumed*
 convention, not a fact read from the file. We adopt the standard FreeSurfer
 ``aparc+aseg`` enumeration in the layout most commonly distributed with the
@@ -28,7 +28,7 @@ convention, not a fact read from the file. We adopt the standard FreeSurfer
     indices 42..48  : right-hemisphere subcortex (FreeSurfer aseg order)
     indices 49..82  : right-hemisphere cortex   (FreeSurfer aparc order)
 
-If your ``DTI_A.mat`` was exported under a different convention (e.g. right
+If your ``DTI-og.mat`` was exported under a different convention (e.g. right
 hemisphere first, or subcortex appended after both cortices), supply the true
 lookup table via :func:`labels_from_file` and the numeric node indices remain
 authoritative regardless. Downstream reporting always prints the integer index
@@ -100,7 +100,7 @@ def _hemisphere_block(prefix: str) -> list[str]:
 def build_labels_83() -> list[str]:
     """
     Return the assumed 83-element Desikan-Killiany label vector, index-aligned
-    to the rows/columns of ``DTI_A.mat`` under the convention documented in the
+    to the rows/columns of ``DTI-og.mat`` under the convention documented in the
     module header.
     """
     lh_ctx, lh_sub = _hemisphere_block("lh")
@@ -116,7 +116,7 @@ def labels_from_file(path: str | Path) -> list[str]:
     """
     Load an explicit index -> label lookup table (one label per line, ordered by
     node index). Use this to override the assumed ordering when the true region
-    nomenclature for a given ``DTI_A.mat`` is known.
+    nomenclature for a given ``DTI-og.mat`` is known.
     """
     path = Path(path)
     labels = [ln.strip() for ln in path.read_text().splitlines() if ln.strip()]

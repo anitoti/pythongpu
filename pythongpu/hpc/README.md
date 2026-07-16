@@ -51,7 +51,7 @@ has an in-file default:
 | `K_MIN`, `K_MAX` | `0.45`, `0.65` | Coupling-coefficient interval endpoints |
 | `GRID_N` | `361` | Initial-condition grid points per axis |
 | `K_CLUSTERS` | `auto` | Basin count (`auto` = VPS consensus selection) |
-| `DTI_PATH` | `data/DTI_A.mat` | Structural connectivity matrix |
+| `DTI_PATH` | `data/DTI-og.mat` | Structural connectivity matrix |
 | `RESULTS_ROOT` | `data/coupling_sweep` | Per-task output root and frame gallery |
 | `FRAME_RATE` | `12` | Output animation rate (frames/second) |
 

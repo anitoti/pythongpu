@@ -52,7 +52,7 @@ set -euo pipefail
 # unless the submitter overrides them via --export.
 : "${GRID_N:=361}"                    # initial-condition grid points per axis
 : "${K_CLUSTERS:=auto}"              # basin count; 'auto' = VPS consensus
-: "${DTI_PATH:=data/DTI_A.mat}"      # structural connectivity matrix
+: "${DTI_PATH:=data/DTI-og.mat}"      # structural connectivity matrix
 : "${RESULTS_ROOT:=data}"            # per-task output root -> data/task_*/
 : "${NULL_REPS:=0}"                  # >0 = structure-vs-noise guard on 'auto'
                                       # (returns a single basin instead of

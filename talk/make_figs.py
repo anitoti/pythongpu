@@ -244,7 +244,7 @@ def fig_persistence():
 def fig_network():
     import scipy.io
     import networkx as nx
-    A = scipy.io.loadmat("data/DTI_A.mat")["A"].astype(float)
+    A = scipy.io.loadmat("data/DTI-og.mat")["A"].astype(float)
     A = np.maximum(A, A.T)
     np.fill_diagonal(A, 0)
     G = nx.from_numpy_array(A)
