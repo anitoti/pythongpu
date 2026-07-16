@@ -7,6 +7,7 @@ import numpy as np
 
 from pythongpu.pipeline.clv_diagnostics import CLVCalculator
 from pythongpu.networks.static_adjacency import load_dti_laplacian
+from pythongpu.networks.random_graphs import generate_ba_graph
 from pythongpu.oscillators.lorenz import LorenzNetwork
 
 
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument('--qr-interval', type=int, default=10, help='QR orthonormalization interval')
     parser.add_argument('--device', type=str, default=None, help='torch device (cpu or cuda)')
     parser.add_argument('--coupling', type=float, default=0.1, help='network coupling strength (passed to LorenzNetwork)')
+    parser.add_argument('--null-model', action='store_true', help='use a BA scale-free null model instead of the DTI connectome')
     args = parser.parse_args(argv)
 
     device = torch.device(args.device) if args.device else (torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'))
@@ -27,7 +29,14 @@ def main(argv: list[str] | None = None) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Load Laplacian (L) and node count
-    L, N = load_dti_laplacian(args.mat, device=device)
+    if args.null_model:
+        # Use BA scale-free null model with parameters chosen to roughly match connectome density
+        # BA parameter m controls edges added per new node; m=6 is a reasonable starting point for n=83
+        print('Using BA scale-free null model (n=83, m=6)')
+        L = generate_ba_graph(n=83, m=6, device=device, plot=False)
+        N = L.shape[0]
+    else:
+        L, N = load_dti_laplacian(args.mat, device=device)
 
     # build Lorenz network with user-specified coupling
     lor = LorenzNetwork(L, device=device, coupling=args.coupling)
