@@ -1,0 +1,24 @@
+{
+  "f32568273adcc5f348685960e05d79ba5080894fd6b90e4f19b58e6e16773340": {
+    "filename": "data/DTI-og.mat",
+    "sha256": "f32568273adcc5f348685960e05d79ba5080894fd6b90e4f19b58e6e16773340",
+    "n": 83,
+    "edges": 850,
+    "deg_min": 2.0,
+    "deg_med": 20,
+    "deg_max": 44.0,
+    "algebraic_connectivity": 1.9152801912673083,
+    "spectral_radius": 24.16988697388248,
+    "k_eig": 4,
+    "best_k_sil": 2,
+    "k_chosen": 2,
+    "silhouette_chosen": 0.9743848172742969,
+    "modularity": -2.768166089935665e-06,
+    "outputs": [
+      "output/dti_spectral",
+      "output/dti_spectral/plots",
+      "output/dti_spectral/report.pdf"
+    ],
+    "timestamp": "2026-07-16T15:48:45.902836"
+  }
+}
