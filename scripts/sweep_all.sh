@@ -47,7 +47,7 @@ export PYTHONPATH=".${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON="${PYTHON:-python3}"
 GRID_N="${GRID_N:-361}"
 K_CLUSTERS="${K_CLUSTERS:-4}"
-DTI_PATH="${DTI_PATH:-data/DTI_A.mat}"
+DTI_PATH="${DTI_PATH:-data/DTI-og.mat}"
 OUT_ROOT="${OUT_ROOT:-data}"
 OSCILLATORS="${OSCILLATORS:-lorenz rossler hr}"
 

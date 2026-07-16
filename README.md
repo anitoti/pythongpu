@@ -32,7 +32,7 @@ Experiment/sweep scripts live in `pythongpu.pipeline`:
 python3 -m pythongpu.pipeline.inspect_data
 python3 -m pythongpu.pipeline.sparse_brain_sim
 python3 -m pythongpu.pipeline.run_sim
-python3 -m pythongpu.pipeline.lorenz_sweep --grid-n 64 --coupling 0.5 --dti-path data/DTI_A.mat --outdir data/
+python3 -m pythongpu.pipeline.lorenz_sweep --grid-n 64 --coupling 0.5 --dti-path data/DTI-og.mat --outdir data/
 python3 -m pythongpu.pipeline.run_sweep --system rossler -- --outdir data/rossler/
 python3 -m pythongpu.processing.multifractal_analysis
 ```

@@ -276,7 +276,7 @@ def main(argv=None) -> int:
     ap.add_argument("--record-stride", type=int, default=5)
     ap.add_argument("--node-x", type=int, default=28)
     ap.add_argument("--node-y", type=int, default=79)
-    ap.add_argument("--dti-path", default="data/DTI_A.mat")
+    ap.add_argument("--dti-path", default="data/DTI-og.mat")
     ap.add_argument("--min-samples", type=int, default=10)
     ap.add_argument("--n-sub", type=int, default=8000)
     ap.add_argument("--seed", type=int, default=0)
