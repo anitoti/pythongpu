@@ -434,11 +434,77 @@ tau     = torch.argmax(corr, dim=0)   # all 3403
       \end{block}
   \end{columns}
   \vfill
-  \pending{wall-clock MATLAB vs GPU benchmark --- no MATLAB licence on our nodes yet.}
+  \centering{\footnotesize Benchmarked against a \textbf{serial CPU reference}
+  (a line-by-line transcription of the MATLAB) --- same maths, same pair count.
+  No MATLAB licence required, and it isolates the algorithm rather than the language.}
 \end{frame}
-\note{The engineering slide. Be honest at the bottom: I have the algorithmic
-comparison but NOT a measured speedup, because there's no MATLAB on the cluster.
-Don't invent a number. ~2 min.}
+\note{The engineering slide. The serial reference is the honest comparator: it's
+the same algorithm, so we measure parallelisation, not MATLAB-vs-Python language
+overhead. ~1.5 min.}
+
+
+% ═════════════════════════════════════════════════════════ 10b
+\begin{frame}[fragile]{The Port Was Slow --- and the FFT Wasn't Why}
+  \GeoPanels
+  \vspace{0.15cm}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \begin{block}{First measurement: disappointing}
+        \centering\footnotesize
+        \begin{tabular}{lcc}
+          \toprule
+          $T$ & serial CPU & \textbf{GPU port} \\
+          \midrule
+          128 & 0.18 s & \textcolor{Rust}{0.83$\times$} \\
+          512 & 0.42 s & 2.97$\times$ \\
+          2048 & 2.61 s & 6.54$\times$ \\
+          \bottomrule
+        \end{tabular}
+        \par\smallskip
+        {\footnotesize $3\times$ for an embarrassingly parallel problem --- and
+        \textbf{slower than serial} at small $T$. Something was wrong.}
+      \end{block}
+      \begin{block}{Profiling found it}
+        \begin{lstlisting}
+for lag_val in range(-T+1, T):   # 2T-1 = 19,999
+    mask = tau == lag_val        #   iterations at T=1e4
+        \end{lstlisting}
+        \footnotesize
+        The FFT parallelised $\tau$ --- then a \textbf{Python loop over every
+        candidate lag} threw the win away.
+      \end{block}
+    \column{0.47\textwidth}
+      \begin{block}{The fix: one gather, no loop}
+        \footnotesize
+        Each pair has its own lag, so build \textbf{per-pair aligned index grids}
+        and gather once:
+        \begin{lstlisting}
+ti, tj = t + shift_i, t + shift_j
+xa = x[ti, a_idx];  xb = x[tj, b_idx]
+L  = norm((xa - xb) * valid, dim=0)
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{\alert{Result}}
+        \centering
+        \begin{tabular}{lcc}
+          \toprule
+          $T$ & looped & \textbf{vectorised} \\
+          \midrule
+          256 & 3.05$\times$ & \textbf{233$\times$} \\
+          1024 & 3.66$\times$ & \textbf{255$\times$} \\
+          2048 & 6.54$\times$ & \textbf{375$\times$} \\
+          \bottomrule
+        \end{tabular}
+        \par\smallskip
+        {\footnotesize $375\times$ over serial; a further $\sim$57$\times$ over my
+        own first port. Verified against the reference to float32 precision
+        (max $|\Delta L| = 1.9\times10^{-6}$).}
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{THE HPC slide. The arc is the point: naive port 3x -> profile -> the
+bottleneck is a Python loop, not the maths -> vectorise -> 375x, verified correct.
+"The FFT was never the problem. The loop after it was." ~2 min.}
 
 % ═════════════════════════════════════════════════════════ 11
 \begin{frame}[fragile]{Did I Actually Reproduce It? {\normalfont(I tested. No.)}}
@@ -479,10 +545,11 @@ x[lag:, i] - x[:-lag, j]
       \end{block}
   \end{columns}
   \vfill
-  {\footnotesize\color{Rust}\textbf{So which is right?} Mine aligns by the lag it
-  measured. To \emph{replicate} the paper I must reproduce the original's
-  behaviour; to be \emph{correct} I must not. That is a conversation with my
-  advisor, not a decision I make silently.}
+  {\footnotesize\color{Rust}\textbf{Measured:} the under-shift mis-aligns every
+  pair, so it \textbf{inflates} $L$ --- $L_{\text{matlab}} \ge L_{\text{corrected}}$ on
+  \textbf{36/36} pairs, mean ratio \textbf{1.96}. \textbf{So which is right?} To
+  \emph{replicate} I must reproduce the original; to be \emph{correct} I must not.
+  My code now ships \textbf{both}, so it is a measurement rather than an argument.}
 \end{frame}
 \note{This is the most grown-up slide in the deck. I tested my own port against the
 source and it failed — and the discrepancy may be a bug in the published code. Do
