@@ -164,7 +164,53 @@ def count_from_integration(coupling: float, grid_n: int, grid_lo: float,
 
     res = group_emergent(desc, min_samples=min_samples)
     res.update(coupling=coupling, n_ics=B, source=f"integrate(K={coupling},grid={grid_n})")
+    res["_desc"] = desc
     return res
+
+
+# ── radius plateau: the test that decides "real count" vs "continuum" ────────
+def scan_radius(desc: np.ndarray, min_samples: int = 10, pca_dim: int = 10,
+                lo: float = 0.25, hi: float = 4.0, n_steps: int = 30) -> dict:
+    """
+    Sweep the DBSCAN radius over a wide range and record the count at each.
+
+    This is the decisive test. N genuinely well-separated attractors produce a
+    PLATEAU: the same count over a broad radius range, because real density gaps
+    do not care where you put the threshold. A continuum — one connected cloud
+    of varying density — instead fragments monotonically as the radius shrinks,
+    with no flat region, and whatever count you report is just an artifact of
+    where the k-distance knee happened to land.
+    """
+    Xs = StandardScaler().fit_transform(desc)
+    if Xs.shape[1] > pca_dim:
+        Xs = PCA(n_components=pca_dim, random_state=0).fit_transform(Xs)
+    eps0, _ = _auto_eps(Xs, min_samples)
+
+    scales = np.geomspace(lo, hi, n_steps)
+    counts, noises = [], []
+    for s in scales:
+        lab = DBSCAN(eps=eps0 * s, min_samples=min_samples).fit_predict(Xs)
+        counts.append(int(len(set(lab)) - (1 if -1 in lab else 0)))
+        noises.append(float(np.mean(lab == -1)))
+    counts = np.asarray(counts)
+
+    # Longest run of an identical count >= 1, measured in radius decades so the
+    # verdict does not depend on how finely we sampled.
+    best_len, best_val, best_span = 0, None, (None, None)
+    i = 0
+    while i < len(counts):
+        j = i
+        while j + 1 < len(counts) and counts[j + 1] == counts[i]:
+            j += 1
+        if counts[i] >= 1 and (j - i + 1) > best_len:
+            best_len, best_val = j - i + 1, int(counts[i])
+            best_span = (float(scales[i]), float(scales[j]))
+        i = j + 1
+    decades = (np.log10(best_span[1] / best_span[0])
+               if best_span[0] and best_span[1] and best_span[1] > best_span[0] else 0.0)
+    return dict(eps_knee=eps0, scales=scales, counts=counts, noise=np.asarray(noises),
+                plateau_count=best_val, plateau_steps=best_len,
+                plateau_span=best_span, plateau_decades=float(decades))
 
 
 # ── reporting ────────────────────────────────────────────────────────────────
@@ -234,6 +280,16 @@ def main(argv=None) -> int:
     ap.add_argument("--min-samples", type=int, default=10)
     ap.add_argument("--n-sub", type=int, default=8000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--save-desc", default=None,
+                    help="integrate mode: save the final-state descriptor (.npy, "
+                         "~130 MB at 361^2) so radius analysis is free later "
+                         "instead of costing another GPU-hour per K.")
+    ap.add_argument("--scan-desc", default=None,
+                    help="load a saved descriptor and sweep the DBSCAN radius to "
+                         "test for a PLATEAU (a real count) vs a continuum (no "
+                         "flat region -> the count is an artifact). No GPU.")
+    ap.add_argument("--scan-csv", default=None,
+                    help="where --scan-desc writes its count-vs-radius table")
     ap.add_argument("--csv", default=None,
                     help="write the result row(s) here. Without this an array "
                          "job's results live only in its stdout log.")
@@ -241,12 +297,46 @@ def main(argv=None) -> int:
 
     rng = np.random.default_rng(args.seed)
 
+    if args.scan_desc:
+        desc = np.load(args.scan_desc)
+        r = scan_radius(desc, min_samples=args.min_samples)
+        print(f"[scan]     descriptor {desc.shape} from {args.scan_desc}")
+        print(f"[scan]     eps_knee={r['eps_knee']:.3f}")
+        for s_, c_, nz in zip(r["scales"], r["counts"], r["noise"]):
+            print(f"    scale={s_:6.3f}  eps={r['eps_knee']*s_:7.3f}  "
+                  f"n_attractors={c_:4d}  noise={nz:5.1%}")
+        dec = r["plateau_decades"]
+        print(f"\n[verdict]  longest plateau: count={r['plateau_count']} over "
+              f"scales {r['plateau_span'][0]:.2f}-{r['plateau_span'][1]:.2f} "
+              f"({dec:.2f} radius decades, {r['plateau_steps']} steps)")
+        if dec >= 0.3:
+            print(f"[verdict]  PLATEAU -> the count {r['plateau_count']} is robust "
+                  f"to the radius and can be reported.")
+        else:
+            print("[verdict]  NO PLATEAU -> continuum. The descriptor shows no "
+                  "well-separated attractors; any single count is an artifact of "
+                  "where the knee landed. Do NOT report a number.")
+        if args.scan_csv:
+            import csv as _csv
+            with open(args.scan_csv, "w", newline="") as fh:
+                w = _csv.writer(fh)
+                w.writerow(["scale", "eps", "n_attractors", "noise_frac"])
+                for s_, c_, nz in zip(r["scales"], r["counts"], r["noise"]):
+                    w.writerow([f"{s_:.6f}", f"{r['eps_knee']*s_:.6f}", c_, f"{nz:.6f}"])
+            print(f"[csv]      -> {args.scan_csv}")
+        return 0
+
     if args.integrate:
         res = count_from_integration(
             args.coupling, args.grid_n, args.grid_lo, args.grid_hi, args.tmax,
             args.t_transient, args.record_stride, args.node_x, args.node_y,
             args.min_samples, args.dti_path)
         _report(res)
+        if args.save_desc:
+            Path(args.save_desc).parent.mkdir(parents=True, exist_ok=True)
+            np.save(args.save_desc, res["_desc"].astype(np.float32))
+            print(f"[desc]     saved {res['_desc'].shape} -> {args.save_desc}")
+        res.pop("_desc", None)
         if args.csv:
             _write_rows([res], Path(args.csv),
                         extra=dict(grid_n=args.grid_n, tmax=args.tmax,
