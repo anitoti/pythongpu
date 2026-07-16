@@ -4,4 +4,7 @@
 *.out
 *.snm
 *.toc
+*.vrb
+*.fls
+*.fdb_latexmk
 *.pdf

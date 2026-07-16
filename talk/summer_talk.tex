@@ -327,23 +327,13 @@ collapses. Daza: a theorem beats a line fit. Say that out loud. ~1.5 min.}
       \footnotesize
       $H=e_1e_1^{\!\top}$ couples $x$-components; $K$ is the coupling --- the one knob.
     \column{0.40\textwidth}
-      \begin{block}{The network}
-        \footnotesize
-        \begin{tabular}{ll}
-          \toprule
-          Regions & 83 \\
-          Edges & 850 \\
-          Density & 0.25 \\
-          Degree & 2 to 44 \\
-          Diameter & 4 \\
-          State space & $83\times3=249$ dims \\
-          \bottomrule
-        \end{tabular}
-      \end{block}
+      \centering
+      \fig{dti_network.png}{83 regions, 850 edges, density 0.25, diameter 4.
+      State space $83\times3=249$ dimensions.}
       \begin{block}{Why the Laplacian}
         \footnotesize
         $L\mathbf{1}=\mathbf{0}$, so full synchrony is \emph{always} an exact
-        solution. The question is whether anything \emph{else} coexists with it.
+        solution. The question is whether anything \emph{else} coexists.
       \end{block}
   \end{columns}
 \end{frame}
@@ -449,21 +439,10 @@ overhead. ~1.5 min.}
   \vspace{0.15cm}
   \begin{columns}[T]
     \column{0.5\textwidth}
-      \begin{block}{First measurement: disappointing}
-        \centering\footnotesize
-        \begin{tabular}{lcc}
-          \toprule
-          $T$ & serial CPU & \textbf{GPU port} \\
-          \midrule
-          128 & 0.18 s & \textcolor{Rust}{0.83$\times$} \\
-          512 & 0.42 s & 2.97$\times$ \\
-          2048 & 2.61 s & 6.54$\times$ \\
-          \bottomrule
-        \end{tabular}
-        \par\smallskip
-        {\footnotesize $3\times$ for an embarrassingly parallel problem --- and
-        \textbf{slower than serial} at small $T$. Something was wrong.}
-      \end{block}
+      \centering
+      \fig{benchmark.png}{Left: runtime. Right: speedup over the serial
+      reference. The looped port never clears $7\times$; vectorised reaches
+      $375\times$.}
       \begin{block}{Profiling found it}
         \begin{lstlisting}
 for lag_val in range(-T+1, T):   # 2T-1 = 19,999
@@ -484,21 +463,12 @@ xa = x[ti, a_idx];  xb = x[tj, b_idx]
 L  = norm((xa - xb) * valid, dim=0)
         \end{lstlisting}
       \end{block}
-      \begin{block}{\alert{Result}}
-        \centering
-        \begin{tabular}{lcc}
-          \toprule
-          $T$ & looped & \textbf{vectorised} \\
-          \midrule
-          256 & 3.05$\times$ & \textbf{233$\times$} \\
-          1024 & 3.66$\times$ & \textbf{255$\times$} \\
-          2048 & 6.54$\times$ & \textbf{375$\times$} \\
-          \bottomrule
-        \end{tabular}
-        \par\smallskip
-        {\footnotesize $375\times$ over serial; a further $\sim$57$\times$ over my
-        own first port. Verified against the reference to float32 precision
-        (max $|\Delta L| = 1.9\times10^{-6}$).}
+      \begin{block}{\alert{Result: $3\times \rightarrow 375\times$}}
+        \footnotesize
+        A further $\sim$57$\times$ over my own first port --- and the looped
+        version was \textbf{slower than serial} at $T{=}128$ ($0.83\times$).
+        Verified against the reference to float32 precision
+        (max $|\Delta L| = 1.9\times10^{-6}$).
       \end{block}
   \end{columns}
 \end{frame}
@@ -517,17 +487,10 @@ bottleneck is a Python loop, not the maths -> vectorise -> 375x, verified correc
   \begin{columns}[T]
     \column{0.46\textwidth}
       \centering
-      \begin{tabular}{lcc}
-        \toprule
-        test case & $\tau$ identical & $L$ matches \\
-        \midrule
-        \texttt{Example\_A\_1} & \textcolor{Rust}{no} (max diff 2) & \textcolor{Rust}{no} (0.79) \\
-        \texttt{Example\_A\_2} & \textcolor{Rust}{no} (max diff 1) & \textcolor{Rust}{no} (0.79) \\
-        \texttt{Example\_A\_3} & \textcolor{Olive}{yes} & \textcolor{Rust}{no} (0.71) \\
-        \bottomrule
-      \end{tabular}
-      \par\smallskip
-      {\footnotesize $L$ disagrees on \emph{every} input.}
+      \fig{alignment_bias.png}{Every pair lies above the diagonal.}
+      {\scriptsize $\tau$ matches on \texttt{Example\_A\_3}, differs on
+      \texttt{A\_1}/\texttt{A\_2} (tie-breaking). $L$ disagrees on
+      \emph{every} input.}
     \column{0.50\textwidth}
       \begin{block}{The cause: an off-by-one --- in the \emph{original}}
         \begin{lstlisting}
@@ -675,20 +638,8 @@ artifact. The test I built to prove that is what proved me wrong. ~1.5 min.}
   \begin{columns}[T]
     \column{0.52\textwidth}
       \centering
-      \begin{tabular}{lccc}
-        \toprule
-        averaging $T$ & 50 & 800 & 1600 \\
-        \midrule
-        $K=0$ observed & 1.332 & 0.308 & \textbf{0.241} \\
-        $1/\sqrt{T}$ predicted & --- & 0.274 & 0.218 \\
-        \midrule
-        $K=0.5$ observed & 86.75 & 87.19 & \textbf{87.28} \\
-        \bottomrule
-      \end{tabular}
-      \par\smallskip
-      {\footnotesize $K=0$ converges as ergodicity demands. $K=0.5$ is
-      \textbf{flat over $32\times$ more averaging} --- a \textbf{362$\times$}
-      separation.}
+      \fig{convergence_control.png}{$K=0$ tracks $1/\sqrt{T}$ as ergodicity
+      demands; $K=0.5$ is flat over $32\times$ more averaging.}
     \column{0.44\textwidth}
       \begin{block}{Both alternatives excluded}
         \footnotesize
@@ -721,17 +672,8 @@ without doing this was wrong. ~2 min.}
         \textbf{locked} on one.
       \end{block}
       \centering
-      \begin{tabular}{lcc}
-        \toprule
-        $K$ & $\langle|\langle X\rangle|\rangle$ & \% locked \\
-        \midrule
-        0.00 & 0.025 & \textbf{0.0\%} \\
-        0.20 & 7.270 & 94.9\% \\
-        0.50 & 6.934 & \textbf{97.8\%} \\
-        \bottomrule
-      \end{tabular}
-      \par\smallskip
-      {\footnotesize Uncoupled: every node ergodic. Coupled: pinned to one wing.}
+      \fig{lobe_histogram.png}{Uncoupled: every node ergodic, $\langle X\rangle\to0$.
+      Coupled: 97.8\% pinned to one wing at $\pm7$.}
     \column{0.46\textwidth}
       \begin{block}{\alert{So the basin label is exact}}
         \footnotesize
@@ -751,6 +693,36 @@ without doing this was wrong. ~2 min.}
 \note{This is the finding. Uncoupled = ergodic = one attractor. Coupled = locked =
 combinatorially many. And the label is a FACT, not an estimate — that's what kills
 every clustering problem in this talk. ~2 min.}
+
+% ═════════════════════════════════════════════════════════ 16b
+\begin{frame}{Where Does the Locking Switch On?}
+  \GeoPanels
+  \vspace{0.1cm}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+      \centering
+      \fig{onset_curve.png}{Deterministic $32^2$ slice, 1024 ICs per coupling.}
+    \column{0.42\textwidth}
+      \begin{block}{A sigmoid bifurcation}
+        \footnotesize
+        Locking switches on at \textbf{$K\approx0.07$} --- \emph{below} the window
+        anyone had swept. $\Lambda$ climbs from $0.026$ (ergodic) to $7.29$,
+        against a single-wing value of $7.8$.
+      \end{block}
+      \begin{block}{\alert{And it orders the regimes}}
+        \footnotesize
+        The largest basin holds $0.1\%$ of ICs below onset (sign noise), peaks at
+        \textbf{9.3\% near $K\approx0.12$}, and falls to $0.4\%$ by $K=0.2$.
+        \smallskip
+        The paper's coupling, \texttt{gel}$=0.5$, sits \textbf{deep in the riddled
+        regime} --- basins too finely intermingled to map. The only window where
+        they have appreciable size is $K\approx0.08$--$0.12$.
+      \end{block}
+  \end{columns}
+\end{frame}
+\note{This is the figure nobody else has. The paper works at one coupling; this is
+the bifurcation underneath it. And the punchline is practical: gel=0.5 is the WRONG
+place to try to map basins. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 17
 \begin{frame}{The Result: The Basins Really Are Mingled}
@@ -790,6 +762,9 @@ every clustering problem in this talk. ~2 min.}
         Bollt--Fish report ``intricately \emph{mingled} basin boundaries'' at
         \texttt{gel}$=0.5$ --- our $K=0.5$. \textbf{Confirmed, with a mechanism.}
       \end{block}
+      \centering
+      \fig{persistence.png}{The label is only as good as the locking: a 50.2\%
+      coin flip at $K{=}0.01$ (control), 99.9\% at $K{=}0.5$.}
   \end{columns}
 \end{frame}
 \note{Land it. And be generous: this CONFIRMS my advisor's paper at his own
