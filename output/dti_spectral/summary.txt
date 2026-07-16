@@ -1,0 +1,4 @@
+n=83
+edges=850
+deg min/med/max = 2.0/20/44.0
+algebraic connectivity (Fiedler) = 1.915280

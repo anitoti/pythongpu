@@ -23,7 +23,7 @@
 #
 #  Env overrides
 #  -------------
-#    PYTHON (python3), GRID_N (361), K_CLUSTERS (4), DTI_PATH (data/DTI_A.mat),
+#    PYTHON (python3), GRID_N (361), K_CLUSTERS (4), DTI_PATH (data/DTI-og.mat),
 #    OUT_ROOT (data), OSCILLATORS ("lorenz rossler hr"), WAIT_PID (none),
 #    and per-oscillator windows <OSC>_KMIN / <OSC>_KMAX / <OSC>_KSTEPS.
 #

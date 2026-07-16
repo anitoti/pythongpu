@@ -10,7 +10,7 @@ convention documented in :mod:`pythongpu.networks.desikan_killiany`.
 Usage
 -----
     python3 scripts/run_dti_adjacency.py
-    python3 scripts/run_dti_adjacency.py --mat data/DTI_A.mat --var A
+    python3 scripts/run_dti_adjacency.py --mat data/DTI-og.mat --var A
     python3 scripts/run_dti_adjacency.py --labels my_lut.txt --out edges.tsv
 
 The numeric node indices are authoritative; the region labels reflect an

@@ -24,7 +24,7 @@ from pythongpu.oscillators.rossler import RosslerNetwork
 from pythongpu.oscillators.vanderpol import VanDerPolNetwork
 from pythongpu.processing.chimera_classifier import local_coherence
 
-DTI_PATH = "data/DTI_A.mat"
+DTI_PATH = "data/DTI-og.mat"
 TOPOLOGY_SEED = 42
 
 

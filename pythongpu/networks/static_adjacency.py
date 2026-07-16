@@ -19,7 +19,7 @@ def load_dti_laplacian(
     Load DTI-og.mat (professor original), build the weighted graph Laplacian, return (L, n).
 
     Replicates the MATLAB preamble exactly:
-        load('DTI_A.mat')
+        load('DTI-og.mat')
         A = double(A)
         n = size(A, 2)
         L = diag(sum(A, 2)) - A

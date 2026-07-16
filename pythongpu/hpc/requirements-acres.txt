@@ -1,0 +1,40 @@
+# ============================================================================
+#  requirements-acres.txt — pinned to the versions the code is developed
+#  against on the GPU dev box, so an overnight ACRES job cannot fail on a
+#  library version this repo has never been run with.
+#
+#  Captured from `pip freeze` on the dev box on 2026-07-15. If you upgrade a
+#  package there, update it here in the same commit or the two environments
+#  drift apart silently.
+#
+#  torch is NOT pinned here — its wheel depends on the CUDA driver of the
+#  target node, so bootstrap_venv.sh installs it separately (2.0.1+cu118 to
+#  match the dev box).
+# ============================================================================
+
+numpy==1.24.4
+scipy==1.10.1
+scikit-learn==1.3.2
+matplotlib==3.7.5
+networkx==3.1
+pandas==2.0.3
+tqdm==4.68.3
+
+# Imported by the fMRI / connectome loading path.
+nilearn==0.10.4
+nibabel==5.2.1
+
+# animate_coupling.py writes video through cv2.VideoWriter. Two deliberate
+# deviations from the dev box's opencv-python==4.5.2.54:
+#   - headless build: same cv2 API and VideoWriter, minus the GUI/X11 link that
+#     has nothing to resolve against on a batch node.
+#   - 4.5.4.60, not 4.5.2.54: 4.5.2.54 ships no cp310 wheel (cp36-cp39 only),
+#     so on ACRES's Python 3.10 pip would fall back to compiling OpenCV from
+#     source and fail. 4.5.4.60 is the earliest release with a cp310 wheel, so
+#     it is the smallest step off the dev box that installs at all.
+opencv-python-headless==4.5.4.60
+
+# The dev box still has pytest 4.6.9 (the distro package). That is old enough
+# to be worth leaving behind rather than reproducing — nothing in tests/ needs
+# it, and 4.6 predates fixtures these tests would otherwise be free to use.
+pytest==7.4.3

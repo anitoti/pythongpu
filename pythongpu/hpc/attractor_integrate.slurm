@@ -65,7 +65,7 @@ export PYTHONPATH=$SLURM_SUBMIT_DIR
 : "${GRID_N:=361}"                    # match the sweeps' IC resolution
 : "${TMAX:=500}"                      # long-time averaging window
 : "${T_TRANSIENT:=100}"               # burn-in, discarded
-: "${DTI_PATH:=data/DTI_A.mat}"
+: "${DTI_PATH:=data/DTI-og.mat}"
 : "${RESULTS_ROOT:=/mnt/data/tmp/${USER}/attractor_integrate}"
 # Coupling ladder spanning BOTH the low-K window (where structure is most
 # plausible) and the 0.45-0.65 window the earlier sweeps covered.

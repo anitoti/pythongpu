@@ -7,10 +7,10 @@ Date   : summer 2026
 Project: Nimble Brain — Clarkson University REU (Dr. Jeremie Fish)
 
 Pipeline:
-  1. Load DTI_A.mat structural connectivity matrix via scipy.io.loadmat.
+  1. Load DTI-og.mat structural connectivity matrix via scipy.io.loadmat.
      Symmetrise, zero diagonal, build weighted graph Laplacian.
      [Page 28, full_.m_script.pdf:
-      "load('DTI_A.mat') A = double(A); n = size(A,2);
+      "load('DTI-og.mat') A = double(A); n = size(A,2);
        L = diag(sum(A,2)) - A; gel = 0.5;
        H = [0 0 0; 0 1 0; 0 0 0]; gelLH = gel*kron(L,H)"]
 
@@ -47,7 +47,7 @@ Run:
     python3 pipeline/lorenz_sweep.py
     python3 pipeline/lorenz_sweep.py \
         --grid-n 64 --coupling 0.5 \
-        --dti-path data/DTI_A.mat \
+        --dti-path data/DTI-og.mat \
         --outdir /home/atotilca/pythongpu/data/
 """
 
@@ -478,7 +478,7 @@ def main():
         help="Edges to rewire in perturbation demo.")
     ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat",
         help="Path to DTI-og.mat (professor original DTI). "
-             "[Page 28, full_.m_script.pdf: \"load('DTI_A.mat')\"]")
+             "[Page 28, full_.m_script.pdf: \"load('DTI-og.mat')\"]")
     ap.add_argument("--outdir",     type=str,   default=".",
         help="Output directory for all files.")
     args = ap.parse_args()
@@ -536,7 +536,7 @@ def main():
         n_osc    = n_dti,            # "n = size(A,2)" [Page 28]
     )
     print(
-        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI_A.mat)  "
+        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI-og.mat)  "
         f"coupling={p.coupling}  dt={p.dt}\n"
         f"           transient={p.t_transient}s ({p.steps_transient} steps)  "
         f"record={p.tmax}s ({p.steps_record} steps)\n"

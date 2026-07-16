@@ -420,7 +420,7 @@ def main():
         n_osc    = n_dti,
     )
     print(
-        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI_A.mat)  "
+        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI-og.mat)  "
         f"coupling={p.coupling}  dt={p.dt}\n"
         f"           a={p.a}  b={p.b}  c={p.c}  d={p.d}  s={p.s}  "
         f"r={p.r}  x_rest={p.x_rest}  I={p.I}\n"

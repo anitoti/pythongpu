@@ -5,7 +5,7 @@ run spectral diagnostics to index it.
 
 Naming convention: data/DTI-<tag>.mat
 Examples:
-    scripts/register_dti.py --src /tmp/DTI_A.mat --tag og --move --compute
+    scripts/register_dti.py --src /tmp/DTI-og.mat --tag og --move --compute
     scripts/register_dti.py --src /path/sub-001_DTI.mat --tag sub-001 --compute
 """
 from pathlib import Path
