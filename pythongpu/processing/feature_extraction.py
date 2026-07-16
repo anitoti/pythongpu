@@ -99,18 +99,20 @@ def vector_pattern_state_fast(x: torch.Tensor, alpha: float = 1.0,
     if alignment == "matlab":
         shift = torch.clamp(shift - 1, min=0)
 
-    # Positive lag shifts i, negative lag shifts j (matching the reference).
-    si = torch.where(tau > 0, shift, torch.zeros_like(shift))[None, :]
-    sj = torch.where(tau < 0, shift, torch.zeros_like(shift))[None, :]
+    # Residual x_i(t + tau) - x_j(t): node i carries the lag for tau > 0, node j
+    # for tau < 0 (equivalently x_i(t) - x_j(t + |tau|)). Each node is shifted by
+    # its OWN lag-dependent amount; there is no a/b swap. (A prior version applied
+    # both the shift and an index swap, which left node i shifted in both signs
+    # and inflated L for every tau < 0 pair.)
+    shift_i = torch.where(tau > 0, shift, torch.zeros_like(shift))[None, :]
+    shift_j = torch.where(tau < 0, shift, torch.zeros_like(shift))[None, :]
     t = torch.arange(T, device=x.device)[:, None]
-    ti, tj = t + si, t + sj
+    ti, tj = t + shift_i, t + shift_j
     valid = (ti < T) & (tj < T)
 
-    a_idx = torch.where(tau > 0, i_p, j_p)[None, :].expand(T, -1)
-    b_idx = torch.where(tau > 0, j_p, i_p)[None, :].expand(T, -1)
-    xa = x[ti.clamp(max=T - 1), a_idx]
-    xb = x[tj.clamp(max=T - 1), b_idx]
-    L = torch.linalg.norm((xa - xb) * valid, dim=0)
+    xi = x[ti.clamp(max=T - 1), i_p[None, :].expand(T, -1)]
+    xj = x[tj.clamp(max=T - 1), j_p[None, :].expand(T, -1)]
+    L = torch.linalg.norm((xi - xj) * valid, dim=0)
     return torch.cat([tau.to(L.dtype), L * alpha])
 
 
