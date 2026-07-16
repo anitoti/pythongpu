@@ -720,7 +720,7 @@ every clustering problem in this talk. ~2 min.}
         \footnotesize
         \begin{itemize}\setlength\itemsep{2pt}
           \item Batched RK4 kernel reuses the project's integrator and Jacobian API.
-          \item QR performed every $\textbf{10}$ steps (configurable).
+          \item QR performed every \textbf{10} steps (configurable).
           \item R matrices stored as \texttt{torch.float16} on GPU; Q as \texttt{numpy.float32} on CPU.
           \item Backward linear solves cast R to \texttt{float32} for numerics then normalise columns.
         \end{itemize}
@@ -730,7 +730,9 @@ every clustering problem in this talk. ~2 min.}
       \fig{clv_pipeline.png}{Forward QR every 10 steps; store $R_n$ in half precision; backward solve to reconstruct CLVs.}
   \end{columns}
   \vfill
-  \footnotesize{Implementation: \texttt{pythongpu/pipeline/clv_diagnostics.py} provides \texttt{CLVCalculator} implementing the steps above and a diagnostic that computes pairwise transversality angles among the leading CLVs.}
+  \begin{footnotesize}
+  Implementation: \texttt{pythongpu/pipeline/clv_diagnostics.py} provides \texttt{CLVCalculator} implementing the steps above and a diagnostic that computes pairwise transversality angles among the leading CLVs.
+  \end{footnotesize}
 \end{frame}
 
 \begin{frame}{CLV transversality and riddled basins}
