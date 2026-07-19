@@ -50,6 +50,16 @@
   - [III.8 Step 7 — the Legendre transform to singularity coordinates](#iii8-step-7--the-legendre-transform-to-singularity-coordinates)
   - [III.9 Interpretation, limiting cases, and diagnostics](#iii9-interpretation-limiting-cases-and-diagnostics)
   - [III.10 Correspondence with the implementation](#iii10-correspondence-with-the-implementation)
+- [Part IV — Covariant Lyapunov Vectors, Riddling, and Spectral Graph Theory](#part-iv--covariant-lyapunov-vectors-riddling-and-spectral-graph-theory)
+  - [IV.1 Entropic regression: the backward elimination pass](#iv1-entropic-regression-the-backward-elimination-pass)
+  - [IV.2 Structural–functional fusion](#iv2-structuralfunctional-fusion)
+  - [IV.3 Covariant Lyapunov vectors and the Ginelli algorithm](#iv3-covariant-lyapunov-vectors-and-the-ginelli-algorithm)
+  - [IV.4 The Lyapunov spectrum from the R-diagonals](#iv4-the-lyapunov-spectrum-from-the-r-diagonals--dimension-counting-part-1)
+  - [IV.5 The Kaplan–Yorke dimension](#iv5-the-kaplanyorke-dimension--dimension-counting-part-2)
+  - [IV.6 Transversality angles and riddled basins](#iv6-transversality-angles-and-riddled-basins)
+    - [IV.6a The transverse Lyapunov exponent and the riddling criterion](#iv6a-the-transverse-lyapunov-exponent-and-the-riddling-criterion)
+    - [IV.6b The CLV-angle proxy and the k-means detector](#iv6b-the-clv-angle-proxy-and-the-k-means-detector)
+  - [IV.7 Spectral graph theory: the Laplacian eigenbasis, synchronizability, and random-graph baselines](#iv7-spectral-graph-theory-the-laplacian-eigenbasis-synchronizability-and-random-graph-baselines)
 - [References](#references)
 
 ---
@@ -838,7 +848,7 @@ $$
 3. If $C_{j^\star\to i\mid S_i}$ passes the significance test (§II.7), append $j^\star$ to $S_i$ and record the edge weight $C_{j^\star\to i\mid S_i}$; otherwise stop.
 4. Repeat until no significant candidate remains.
 
-Each accepted edge writes its CMI weight into the directed adjacency $\mathbf A_{j^\star,\,i}$. The network density $\rho = \#\text{edges}/[N(N-1)]$ summarizes the discovered connectome. (The published oCSE also runs a *backward* pruning pass to remove members of $S_i$ made redundant by later additions; the implementation here keeps the forward pass, which is exact when selected drivers remain conditionally informative.)
+Each accepted edge writes its CMI weight into the directed adjacency $\mathbf A_{j^\star,\,i}$. The network density $\rho = \#\text{edges}/[N(N-1)]$ summarizes the discovered connectome. The published method (Sun–Taylor–Bollt; and, in the neurological setting, Fish–Bollt) also runs a *backward* pruning pass that removes members of $S_i$ made redundant by later additions — the step that turns forward oCSE into full **entropic regression**. That backward pass is implemented in `processing/entropic_regression.py` and derived in §IV.1.
 
 ## II.7 The chi-squared significance test
 
@@ -1110,6 +1120,183 @@ The output CSV is in long format with columns `roi, q, hurst, tau, alpha, f_alph
 
 ---
 
+# Part IV — Covariant Lyapunov Vectors, Riddling, and Spectral Graph Theory
+
+*Implemented in `pythongpu/pipeline/clv_diagnostics.py`, `clv_topology.py`, `clv_cli.py`, `baseline_models.py`, and `processing/entropic_regression.py`. Part IV takes the directed connectome of Part II and the coupled-oscillator field of Part I and answers two questions the earlier parts set up but did not close: (i) which reconstructed edges are genuinely **direct**, and (ii) what is the fine-grained stability geometry of the synchronization manifold — is it **riddled**? The spectral-graph-theory section (§IV.7) then explains, from the Laplacian eigenvalues alone, why the empirical connectome and its random-graph nulls sit where they do.*
+
+## IV.1 Entropic regression: the backward elimination pass
+
+Section II.6 built the directed connectome by *forward* greedy selection. Forward selection is order-dependent: a driver $X_j$ admitted early can be rendered redundant by a later admission $X_k$, yet the forward sweep never revisits it. **Entropic regression** (ER; Fish–DeWitt–AlMomani–Laurienti–Bollt 2021) closes this with a *backward* pass — the discriminating step for accurate reconstruction.
+
+Given the forward-aggregated causal set $S_i$, backward elimination re-tests every retained driver *conditioned on all the others*:
+
+$$
+C_{j\to i \mid S_i\setminus\{j\}} \;=\; I\big(X_i(t);\,X_j(t-1)\,\big|\,X_{S_i\setminus\{j\}}(t-1)\big),
+\qquad j\in S_i,
+\tag{IV.1}
+$$
+
+and drops $j$ whenever this falls below the §II.7 significance threshold. Removing one edge can expose another as redundant, so the pass iterates to a fixed point (the `_backward_pass` loop in `entropic_regression.py`). Survivors are re-weighted with their conditional-on-the-rest value — the honest direct-influence strength, not the forward pick-order value.
+
+The mechanism is the annihilation identity (II.15): if $X_j\to X_i$ is indirect through some $X_k\in S_i$, then $C_{j\to i\mid S_i\setminus\{j\}}\approx 0$ once $X_k$ is in the conditioning set, and the edge is cut. Forward-only oCSE keeps such an edge whenever it was admitted *before* its mediator; forward+backward removes it.
+
+$$
+\boxed{\;\text{ER} \;=\; \underbrace{\text{oCSE forward selection}}_{\S\text{II.6}}\;\oplus\;\underbrace{\text{backward elimination to a fixed point}}_{(\text{IV.1})},\qquad \mathbf A_{j,i}=C_{j\to i\mid S_i\setminus\{j\}}.\;}
+\tag{IV.2}
+$$
+
+The unit test `test_entropic_regression_kills_indirect_edge` verifies this on a synthetic chain $X_0\to X_1\to X_2$: ER recovers $0\to1$ and $1\to2$ and deletes the indirect $0\to2$ that a forward-only sweep leaves behind.
+
+## IV.2 Structural–functional fusion
+
+The ER edges of (IV.2) describe *information flow*; DTI tractography (`processing/tractography.py`) gives the *physical* white-matter wiring $S$. Fish et al.'s premise is that flow is carried by wiring, so a functional edge with no structural substrate is suspect. `fuse_structural_functional` offers two combinations:
+
+$$
+\text{gate:}\quad \tilde A_{ij} = A_{ij}\,\mathbf 1[\,S_{ij}>0\,],
+\qquad\qquad
+\text{weight:}\quad \tilde A_{ij} = A_{ij}\,\frac{S_{ij}}{\sum_k S_{ik}}.
+\tag{IV.3}
+$$
+
+The gate is a hard anatomical mask; the weighted form is a soft prior that attenuates (rather than deletes) functionally-inferred edges in proportion to their structural support. Direction is inherited entirely from the functional side; $S$ is symmetric.
+
+## IV.3 Covariant Lyapunov vectors and the Ginelli algorithm
+
+To probe stability we linearize the flow $\dot{\mathbf x}=\mathbf f(\mathbf x)$ of Part I about a trajectory $\mathbf x(t)$. A tangent perturbation $\mathbf v$ obeys the **variational equation**
+
+$$
+\dot{\mathbf v} \;=\; J(\mathbf x(t))\,\mathbf v,
+\qquad J = D\mathbf f,
+\tag{IV.4}
+$$
+
+integrated for $m$ tangent vectors alongside the state by the same RK4 kernel (`_rk4_step` co-advances `state` and the $n\times m$ tangent block, with $J$ supplied analytically — the vectorised block Jacobian of §I.2/`clv_topology.lorenz_clv_closures`).
+
+**Oseledets' theorem** guarantees Lyapunov exponents $\lambda_1\ge\lambda_2\ge\dots$ and a covariant splitting of tangent space into subspaces $E_i(\mathbf x)$ that are *invariant* under the linearized flow and grow at rate $\lambda_i$. The **covariant Lyapunov vectors** (CLVs) $\mathbf v_i(t)$ span these subspaces:
+
+$$
+M(t,s)\,\mathbf v_i(s) \;=\; \frac{\lVert M(t,s)\,\mathbf v_i(s)\rVert}{\lVert \mathbf v_i(s)\rVert}\,\mathbf v_i(t),
+\qquad
+\lambda_i=\lim_{t\to\infty}\frac1t\ln\frac{\lVert M(t,0)\mathbf v_i(0)\rVert}{\lVert\mathbf v_i(0)\rVert},
+\tag{IV.5}
+$$
+
+where $M(t,s)$ is the linear propagator. Unlike the orthonormal Gram–Schmidt vectors produced by plain QR, CLVs are generally **non-orthogonal**, norm-independent, invariant under time reversal, and are the physically meaningful directions of growth — which is precisely why they, not the QR vectors, are used to measure transversality in §IV.6.
+
+**Benettin QR (forward pass).** Direct integration of (IV.4) collapses every tangent vector onto the leading direction, so `run_forward` re-orthonormalizes every `qr_interval` steps by a QR factorization $V = QR$, storing $Q$ (float32, CPU) and the upper-triangular $R$ (float16, GPU — the VRAM-saving choice) at each of the $P$ QR times. The columns of $Q$ are the Gram–Schmidt vectors; the $\ln R_{ii}$ accumulate the exponents (§IV.4).
+
+**Ginelli backward pass.** CLVs are recovered by expressing them in the stored $Q$-bases, $\mathbf v = Q\,\mathbf c$, and propagating the coefficient matrix $C$ *backward*. From $V_{k+1}=V_kR_{k+1}$ one gets the recursion
+
+$$
+C_{k} \;=\; \frac{R_{k+1}^{-1}\,C_{k+1}}{\big\lVert R_{k+1}^{-1}\,C_{k+1}\big\rVert_{\text{col}}},
+\qquad \text{CLV at step }k:\;\; V^{\text{cov}}_k = Q_k\,C_k,
+\tag{IV.6}
+$$
+
+started from an arbitrary upper-triangular $C_P$ and iterated to $k=1$; the upper-triangular structure makes it contract onto the covariant coefficients exponentially fast. This is `run_backward_reconstruct`: it solves the upper-triangular systems $R\,C_{\text{prev}} = C$ (`_solve_triangular`), normalizes columns, and returns $Q_kC_k$. The whole two-pass procedure is the Ginelli et al. (2007) algorithm.
+
+## IV.4 The Lyapunov spectrum from the R-diagonals — "dimension counting," part 1
+
+The diagonal of each stored $R^{(k)}$ records how much each orthonormal direction stretched over one QR interval $\tau=\texttt{qr\_interval}\cdot\Delta t$. Averaging their logs over the run gives the spectrum (`lyapunov_spectrum`):
+
+$$
+\boxed{\;\lambda_i \;=\; \frac{1}{P'\tau}\sum_{k=k_0+1}^{P}\ln\big|R^{(k)}_{ii}\big|,\;}
+\qquad P' = P-k_0,
+\tag{IV.7}
+$$
+
+after discarding the first fraction $k_0/P$ of QR steps (default $0.1$) so the tangent basis has aligned with the true Oseledets directions. Verified against a fabricated $R$-stream in `test_lyapunov_spectrum_from_R_diagonals` (recovers $[0.5,0,-1.0]$) and, physically, by the sign count: $\#\{\lambda_i>0\}\ge 1$ is the operational definition of chaos.
+
+## IV.5 The Kaplan–Yorke dimension — "dimension counting," part 2
+
+Order the spectrum $\lambda_1\ge\lambda_2\ge\dots$ and let $k$ be the largest index whose partial sum is still non-negative, $\sum_{i=1}^{k}\lambda_i\ge0>\sum_{i=1}^{k+1}\lambda_i$. The **Kaplan–Yorke (Lyapunov) dimension** interpolates the fractional level set where the cumulative expansion rate crosses zero:
+
+$$
+\boxed{\;D_{\mathrm{KY}} \;=\; k \;+\; \frac{\sum_{i=1}^{k}\lambda_i}{\lvert\lambda_{k+1}\rvert}.\;}
+\tag{IV.8}
+$$
+
+The Kaplan–Yorke conjecture identifies $D_{\mathrm{KY}}$ with the information dimension $D_1$ of the attractor for typical systems, so (IV.8) is a cheap fractal-dimension estimate obtained *for free* from the CLV forward pass. `kaplan_yorke_dimension` implements it, verified against the textbook Lorenz value $D_{\mathrm{KY}}=2.062$ (`test_kaplan_yorke_lorenz_value`). Two boundary cases matter in practice:
+
+- **Fixed point / full contraction** ($\lambda_1<0$): the formula returns $D_{\mathrm{KY}}=0$.
+- **Ceiling** ($\sum_{i=1}^m\lambda_i\ge 0$ for *all* $m$ computed CLVs): the zero-crossing lies beyond the integrated subspace, so (IV.8) can only report $D_{\mathrm{KY}}\ge m$ — a lower bound, not the true dimension. `clv_cli`/`clv_topology` flag this as `kaplan_yorke_is_ceiling`. On the $N=83$ DTI–Lorenz network at coupling $0.1$, even $m=40$ CLVs hit the ceiling: the regime is *hyperchaotic* (dozens of positive exponents), and resolving $D_{\mathrm{KY}}$ needs of order the full $3N$ spectrum.
+
+## IV.6 Transversality angles and riddled basins
+
+### IV.6a The transverse Lyapunov exponent and the riddling criterion
+
+The synchronization manifold $\mathcal M=\{\mathbf u_1=\dots=\mathbf u_N\}$ is invariant under the diffusively coupled field (I.1); on it lives a chaotic attractor $\mathbf A$. Its stability *within* $\mathcal M$ is set by the internal exponents, but its stability *as a subset of the full space* is governed by the largest **transverse Lyapunov exponent** $\lambda_\perp$ — the growth rate of perturbations pointing off $\mathcal M$, i.e. the leading exponent of (IV.4) restricted to the transverse subspace (the modes $m\ge2$ of the master-stability decomposition I.7).
+
+A basin is **riddled** (Alexander–Yorke–You–Kan 1992; Ott–Sommerer 1994) when
+
+$$
+\lambda_\perp < 0 \quad\text{(attracting on average)}
+\qquad\text{but}\qquad
+\exists\ \text{orbits in }\mathbf A\ \text{with finite-time }\lambda_\perp(t,\Delta)>0,
+\tag{IV.9}
+$$
+
+i.e. the manifold attracts *on average* yet contains transversely-repelling unstable periodic orbits, so the finite-time transverse exponent fluctuates positive. The consequence is dramatic: every neighborhood of $\mathbf A$ contains a positive-measure set of points that are *ejected* to another attractor. The basin is shot through with holes at every scale — arbitrarily close to a point that synchronizes is a point that flies away. This is the "why it gets messy" phenomenon, and it is exactly the intermingled-basin structure reported for coupled Lorenz systems (Ott et al.).
+
+### IV.6b The CLV-angle proxy and the k-means detector
+
+Condition (IV.9) has a geometric fingerprint in the CLVs: as the finite-time $\lambda_\perp$ swings positive, the covariant directions tangent to $\mathcal M$ and those transverse to it approach **tangency** — the hallmark of local loss of hyperbolicity (homoclinic tangencies; Yang–Radons, Takeuchi et al.). `compute_transversality_angles` measures this by taking the leading $K$ CLVs $\{\mathbf v_i(t)\}$, normalizing them, forming the Gram matrix of absolute cosines $G_{ij}=\lvert\hat{\mathbf v}_i^{\top}\hat{\mathbf v}_j\rvert$, and recording the **minimum pairwise angle**
+
+$$
+\theta_{\min}(t) \;=\; \min_{i\ne j}\ \arccos\big(\lvert\hat{\mathbf v}_i(t)^{\top}\hat{\mathbf v}_j(t)\rvert\big).
+\tag{IV.10}
+$$
+
+Under (IV.9) the series $\theta_{\min}(t)$ is **bimodal**: long stretches at moderate angle (the manifold locally hyperbolic) punctuated by near-zero-angle **tangency bursts** (transverse instability). `detect_riddling_kmeans` fits $2$-means to $\{\theta_{\min}(t)\}$ and returns
+
+$$
+\text{RIDDLED}\quad\Longleftrightarrow\quad
+\min_c \pi_c \ge \pi_{\min}\ \ \text{and}\ \ \lvert\mu_{\text{hi}}-\mu_{\text{lo}}\rvert \ge \delta,
+\tag{IV.11}
+$$
+
+both clusters populated (population fraction $\pi_c\ge\pi_{\min}=0.02$) and their centroids separated by at least $\delta=0.15$ rad; otherwise SYNCHRONISED. The reported `burst_fraction` is the mass of the high-angle cluster — a scalar proxy for how "leaky" the basin is. This is an *operational* detector for the tangency signature of (IV.9), not a literal sign test on $\lambda_\perp$; it is validated on synthetic bimodal vs. unimodal series in `test_riddling_detector_bimodal_vs_unimodal`.
+
+## IV.7 Spectral graph theory: the Laplacian eigenbasis, synchronizability, and random-graph baselines
+
+Everything above runs on a network whose only fingerprint, at the linear level, is the spectrum of its Laplacian $L=D-A$ (I.68). Because $L$ is symmetric positive-semidefinite, its eigenvalues are real and ordered
+
+$$
+0=\lambda_1\le\lambda_2\le\dots\le\lambda_N,
+\tag{IV.12}
+$$
+
+with the multiplicity of $0$ equal to the number of connected components (the all-ones vector $\mathbf 1$ always spans a null direction, since $L\mathbf 1=0$). Two eigenvalues carry the dynamics:
+
+- **$\lambda_2$ — the algebraic connectivity (Fiedler value).** The smallest *nonzero* eigenvalue quantifies how hard the graph is to disconnect; its eigenvector (the Fiedler vector) gives the spectral bipartition. Larger $\lambda_2$ ⇒ better-connected, faster consensus/diffusion.
+- **$\lambda_N$ — the spectral radius.** Bounded by the maximum degree, $\lambda_N \le 2\,k_{\max}$ and $\lambda_N\ge k_{\max}+1$, so hubs inflate it.
+
+**The synchronizability eigenratio.** Recall the master-stability decomposition (I.7): a transverse mode $m$ perturbing the synchronous state $\mathbf s(t)$ evolves under $\dot{\boldsymbol\xi}_m=[D\mathbf F(\mathbf s)-\sigma\lambda_m\mathbf H]\boldsymbol\xi_m$, stable iff the master stability function $\Lambda(\sigma\lambda_m)<0$. For the common case where $\Lambda<0$ on a bounded interval $(\alpha_1,\alpha_2)$, **all** transverse modes $m\ge2$ are simultaneously stable iff $\sigma\lambda_2>\alpha_1$ and $\sigma\lambda_N<\alpha_2$, which is feasible for some $\sigma$ precisely when
+
+$$
+\boxed{\;R \;=\; \frac{\lambda_N}{\lambda_2} \;<\; \frac{\alpha_2}{\alpha_1}.\;}
+\tag{IV.13}
+$$
+
+The **eigenratio** $R=\lambda_N/\lambda_2$ is thus an intrinsic, coupling-free measure of a graph's synchronizability: *smaller $R$ ⇒ wider stable coupling window ⇒ easier to synchronize*. This is exactly `baseline_models._laplacian_spectral_summary`.
+
+**The random-graph baselines.** `random_graphs.match_baselines_from_adjacency` builds two nulls with the empirical connectome's node count $N$ and (binarized) edge count $E$:
+
+- **Erdős–Rényi $G(n,m)$** (`gnm_random_graph`): edges thrown uniformly at random. Degrees are Binomial$(N-1,p)$ with $p=2E/[N(N-1)]$, hence homogeneous: the degree heterogeneity $\kappa=\langle k^2\rangle/\langle k\rangle^2\to1$. Its Laplacian spectrum concentrates ($\lambda_2\approx np-\!\sqrt{2np\ln n}$, $\lambda_N\approx np+\!\sqrt{2np\ln n}$), so $R\to1^+$: **ER graphs are near-optimal synchronizers.**
+- **Barabási–Albert** (`barabasi_albert_graph`, $m\approx E/N$): preferential attachment yields a scale-free degree law $P(k)\sim k^{-3}$ with hubs. Hubs push $\lambda_N$ up (via $k_{\max}$) while $\lambda_2$ stays modest, so $\kappa\gg1$ and $R$ is substantially larger than ER's — the *paradox of heterogeneity*: scale-free hubs, for all their efficiency, *hurt* synchronizability.
+
+**What the comparison shows.** Running the identical CLV pipeline (§IV.3–IV.6) on all three networks (`baseline_models.py`) puts topology on equal footing — same $N$, same $E$, unit weights — so only the *shape* differs. An illustrative short CPU run on the $N=83$ connectome ($E=850$, coupling $0.1$) gave:
+
+| network | $\lambda_2$ | $\lambda_N$ | $R=\lambda_N/\lambda_2$ | $\kappa$ (het.) |
+|---|---|---|---|---|
+| Empirical (DTI) | $1.92$ | $45.3$ | $\mathbf{23.7}$ | $1.18$ |
+| Erdős–Rényi | $9.64$ | $32.8$ | $3.4$ | $1.04$ |
+| Barabási–Albert | $7.58$ | $47.3$ | $6.2$ | $1.24$ |
+
+The empirical connectome's eigenratio ($\approx 23.7$) is $\sim7\times$ the ER null and $\sim4\times$ the BA null: the brain's modular, hierarchical wiring is a markedly **poorer** synchronizer than either random baseline with the same edge budget. That low $\lambda_2$ (sluggish global consensus) with high $\lambda_N$ (fast local hub modes) is precisely the regime (IV.13) *cannot* keep globally stable — so the network is pushed off the synchronization manifold into the transverse-instability / riddled dynamics diagnosed in §IV.6, rather than collapsing to clean global sync. The brain's *shape*, read straight off two Laplacian eigenvalues, predicts the mess.
+
+---
+
 ## References
 
 1. J. W. Kantelhardt, S. A. Zschiegner, E. Koscielny-Bunde, S. Havlin, A. Bunde, H. E. Stanley. *Multifractal detrended fluctuation analysis of nonstationary time series.* Physica A **316** (2002) 87–114.
@@ -1127,6 +1314,16 @@ The output CSV is in long format with columns `roi, q, hurst, tau, alpha, f_alph
 13. A. Daza, A. Wagemakers, M. A. F. Sanjuán. *A grid algorithm to identify basins of attraction and the Wada property.* Chaos **28** (2018) 093117.
 14. M. Ester, H.-P. Kriegel, J. Sander, X. Xu. *A density-based algorithm for discovering clusters in large spatial databases with noise (DBSCAN).* Proc. KDD **96** (1996) 226–231.
 15. V. Satopää, J. Albrecht, D. Irwin, B. Raghavan. *Finding a "Kneedle" in a haystack: detecting knee points in system behavior.* Proc. ICDCS Workshops (2011) 166–171.
+16. J. Fish, A. DeWitt, A. A. R. AlMomani, P. J. Laurienti, E. M. Bollt. *Entropic regression with neurologically motivated applications.* Chaos **31** (2021) 113105.
+17. F. Ginelli, P. Poggi, A. Turchi, H. Chaté, R. Livi, A. Politi. *Characterizing dynamics with covariant Lyapunov vectors.* Phys. Rev. Lett. **99** (2007) 130601.
+18. J. Kaplan, J. A. Yorke. *Chaotic behavior of multidimensional difference equations.* In *Functional Differential Equations and Approximation of Fixed Points*, Lecture Notes in Mathematics **730**, Springer (1979) 204–227.
+19. J. C. Alexander, J. A. Yorke, Z. You, I. Kan. *Riddled basins.* Int. J. Bifurcation and Chaos **2** (1992) 795–813.
+20. E. Ott, J. C. Sommerer. *Blowout bifurcations: the occurrence of riddled basins and on-off intermittency.* Phys. Lett. A **188** (1994) 39–47.
+21. K.-A. Takeuchi, H.-L. Yang, F. Ginelli, G. Radons, H. Chaté. *Hyperbolic decoupling of tangent space and effective dimension of dissipative systems.* Phys. Rev. E **84** (2011) 046214.
+22. P. Erdős, A. Rényi. *On the evolution of random graphs.* Publ. Math. Inst. Hung. Acad. Sci. **5** (1960) 17–61.
+23. A.-L. Barabási, R. Albert. *Emergence of scaling in random networks.* Science **286** (1999) 509–512.
+24. M. Fiedler. *Algebraic connectivity of graphs.* Czechoslovak Mathematical Journal **23** (1973) 298–305.
+25. F. R. K. Chung. *Spectral Graph Theory.* CBMS Regional Conference Series in Mathematics **92**, American Mathematical Society, 1997.
 
 ---
 

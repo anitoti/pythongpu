@@ -280,6 +280,147 @@ class CLVCalculator:
         return min_angles
 
 
+# =============================================================================
+# TOPOLOGICAL DIAGNOSTICS OF THE CHAOTIC DYNAMICS
+# =============================================================================
+# Two additions requested for the HCP/VPS pipeline, both derived from data the
+# Ginelli forward/backward passes above already produce:
+#
+#   1. lyapunov_spectrum() + kaplan_yorke_dimension()
+#      "Dimension counting." The diagonal of each stored R matrix records how
+#      much each orthonormal direction stretched (log|R_ii| > 0) or shrank
+#      (< 0) over one QR interval. Averaging log|R_ii| over the whole run and
+#      dividing by the elapsed time gives the Lyapunov exponents λ_1 ≥ … ≥ λ_m.
+#      The Kaplan–Yorke (Lyapunov) dimension interpolates where the cumulative
+#      sum of exponents crosses zero:
+#          D_KY = k + (Σ_{i≤k} λ_i) / |λ_{k+1}|
+#      with k the largest index keeping the partial sum non-negative. This is
+#      the fractal dimension of the attractor — the "how many numbers you need
+#      to pin down the wiggle" count.
+#
+#   2. detect_riddling_kmeans()
+#      Riddling signature (Ott/Alexander; "Intermingled basins in coupled
+#      Lorenz systems", arXiv:1111.5581): the transverse Lyapunov exponent is
+#      negative *on average* yet has positive finite-time fluctuations, so the
+#      minimum-transversality-angle time series is bimodal — long stretches
+#      near the synchronisation manifold (small angle) punctuated by transverse
+#      bursts (large angle). A 2-means split of the angle series that yields two
+#      well-separated, both-populated clusters is the operational fingerprint of
+#      (locally) riddled / intermingled basin structure.
+# =============================================================================
+
+
+def lyapunov_spectrum(
+    R_half_list: List[torch.Tensor],
+    qr_interval: int,
+    dt: float,
+    discard_frac: float = 0.1,
+) -> np.ndarray:
+    """Lyapunov exponents from the stored R diagonals of the forward pass.
+
+    λ_i = < log|R_ii| > / (qr_interval * dt), averaged over QR steps after an
+    initial transient (``discard_frac`` of the steps) so the tangent basis has
+    aligned with the true Oseledets directions.
+
+    Returns an array of m exponents in descending order (they already come out
+    ordered because QR keeps the leading directions leading).
+    """
+    if not R_half_list:
+        raise ValueError("R_half_list is empty — run run_forward first.")
+    m = R_half_list[0].shape[0]
+    n_qr = len(R_half_list)
+    start = int(discard_frac * n_qr)
+    tau = qr_interval * dt
+
+    log_growth = np.zeros(m, dtype=np.float64)
+    count = 0
+    for R_half in R_half_list[start:]:
+        R = R_half.to(dtype=torch.float32).detach().cpu().numpy()
+        diag = np.abs(np.diag(R))
+        # guard against zero/denormal diagonal entries from float16 storage
+        diag = np.where(diag < 1e-12, 1e-12, diag)
+        log_growth += np.log(diag)
+        count += 1
+    if count == 0:
+        raise ValueError("No QR steps left after discarding transient; lower discard_frac.")
+    return log_growth / (count * tau)
+
+
+def kaplan_yorke_dimension(exponents: np.ndarray) -> float:
+    """Kaplan–Yorke (Lyapunov) dimension from an ordered exponent spectrum.
+
+    D_KY = k + (Σ_{i=1..k} λ_i) / |λ_{k+1}|, where k is the largest index whose
+    cumulative exponent sum is still ≥ 0. Returns 0.0 if even λ_1 < 0 (a fixed
+    point / fully contracting), and m (all exponents, no interpolation) if the
+    whole spectrum sums non-negative.
+    """
+    lam = np.sort(np.asarray(exponents, dtype=np.float64))[::-1]
+    csum = np.cumsum(lam)
+    m = len(lam)
+    if lam[0] <= 0:
+        return 0.0
+    # largest k with cumulative sum >= 0
+    k = int(np.searchsorted(-csum, 0.0, side="right"))  # first index where csum < 0
+    if k >= m:
+        return float(m)
+    if lam[k] == 0:
+        return float(k)
+    return float(k) + csum[k - 1] / abs(lam[k])
+
+
+def detect_riddling_kmeans(
+    min_angles: np.ndarray,
+    n_clusters: int = 2,
+    seed: int = 0,
+    separation_thresh: float = 0.15,
+    min_pop_frac: float = 0.02,
+) -> dict:
+    """k-means on the minimum-transversality-angle series to flag riddling.
+
+    A riddled/intermingled regime shows a *bimodal* angle distribution: a dense
+    low-angle cluster (locked to the synchronisation manifold) and a sparse but
+    populated high-angle cluster (transverse bursts). We 2-means the angles and
+    call it RIDDLED when both clusters are populated (each ≥ ``min_pop_frac`` of
+    samples) and their centroids differ by ≥ ``separation_thresh`` radians.
+
+    Returns a dict with the verdict, centroids, populations, and the
+    burst_fraction (fraction of time spent in the high-angle cluster) — a proxy
+    for how "leaky" the basin is.
+    """
+    from sklearn.cluster import KMeans
+
+    x = np.asarray(min_angles, dtype=np.float64).reshape(-1, 1)
+    n = x.shape[0]
+    if n < n_clusters:
+        return {"verdict": "INSUFFICIENT_DATA", "n_samples": n}
+
+    km = KMeans(n_clusters=n_clusters, n_init=10, random_state=seed).fit(x)
+    centers = km.cluster_centers_.ravel()
+    labels = km.labels_
+    order = np.argsort(centers)  # ascending centroid
+    centers_sorted = centers[order]
+    pops = np.array([(labels == c).sum() for c in range(n_clusters)], dtype=np.float64)
+    pops_sorted = pops[order] / n
+
+    low_c, high_c = centers_sorted[0], centers_sorted[-1]
+    separation = high_c - low_c
+    both_populated = bool(pops_sorted.min() >= min_pop_frac)
+    well_separated = bool(separation >= separation_thresh)
+
+    high_cluster = order[-1]
+    burst_fraction = float((labels == high_cluster).sum() / n)
+
+    riddled = both_populated and well_separated
+    return {
+        "verdict": "RIDDLED" if riddled else "SYNCHRONISED",
+        "centroids_rad": centers_sorted.tolist(),
+        "cluster_pop_frac": pops_sorted.tolist(),
+        "centroid_separation_rad": separation,
+        "burst_fraction": burst_fraction,
+        "n_samples": int(n),
+    }
+
+
 if __name__ == '__main__':
     # Lightweight smoke demonstration using a synthetic Lorenz-like 83D system if executed directly.
     # This is not a full test; users should integrate with the project's Lorenz DTI model provided elsewhere.
