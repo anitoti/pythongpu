@@ -71,6 +71,7 @@ submit_one() {
     --gres="$GRES"
     --cpus-per-task="$CPUS"
     --mem="$MEM"
+    --chdir="$REPO_ROOT"
     --output="${logdir}/slurm-%j.out"
   )
   [ -n "$QOS" ] && flags+=(--qos="$QOS")

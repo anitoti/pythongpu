@@ -1,21 +1,24 @@
-from __future__ import annotations
 """CLV diagnostics implementing the Ginelli algorithm.
 
-This module provides CLVCalculator which runs a dual-pass integration:
-- Forward pass: integrate nonlinear state and variational equations using a batched RK4 kernel;
-  perform QR every `qr_interval` steps, store Q (CPU, float32) and R (GPU, float16) to save VRAM.
-- Backward pass: reconstruct covariant Lyapunov vectors (CLVs) by solving the upper-triangular
-  R systems backwards and normalizing columns. CLVs at stored times are Q @ C.
+The core object is :class:`CLVCalculator`, which runs the standard two-pass
+Ginelli construction for covariant Lyapunov vectors (CLVs):
 
-A diagnostic helper computes pairwise transversality angles for the leading K CLVs and saves
-a time-series of the minimum angle to disk (output/clv_angles_K{K}.npy).
+* Forward pass: integrate the nonlinear state and tangent dynamics with a
+  Runge-Kutta 4 (RK4) stepper. Every ``qr_interval`` steps, orthonormalize the
+  tangent basis with QR and store the factors. Writing ``T_k = Q_k R_k`` keeps
+  the expanding directions numerically stable while preserving the triangular
+  coupling needed by the backward pass.
+* Backward pass: recover the CLV coordinates by solving the triangular system
+  ``R_k C_{k-1} = C_k`` from the final QR slice back to the first. The actual
+  CLVs are then ``V_k = Q_k C_k``. This is the Ginelli recursion: QR captures
+  the Oseledets subspaces forward in time, and triangular back-substitution
+  reconstructs the covariant directions that evolve with the dynamics.
 
-Notes:
-- This implementation expects small-to-moderate system sizes (e.g., N=83 Desikan parcellation).
-- The user-supplied `rhs_fn(state)` and `jac_fn(state)` should accept and return torch tensors
-  on the chosen device. jac_fn must return a dense N x N Jacobian.
-
+The module also exposes diagnostics for Lyapunov spectra, Kaplan-Yorke
+dimension, and transversality-angle time series used to detect riddling.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import math
@@ -28,6 +31,7 @@ import torch
 
 
 def _ensure_dir(path: str) -> None:
+    """Create ``path`` if needed."""
     os.makedirs(path, exist_ok=True)
 
 
@@ -49,11 +53,14 @@ class CLVCalculator:
         self.storage_dtype = torch.float16
 
     def _rk4_step(self, state: torch.Tensor, tangents: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Perform one RK4 step for the state and the tangent vectors.
+        """Advance the nonlinear state and tangent equations by one RK4 step.
 
-        state: (n,) tensor
-        tangents: (n, m) tensor
-        returns: new_state, new_tangents
+        Args:
+            state: Current state vector with shape ``(n,)``.
+            tangents: Tangent basis with shape ``(n, m)``.
+
+        Returns:
+            A tuple ``(new_state, new_tangents)`` after one RK4 step.
         """
         dt = self.dt
 
@@ -95,12 +102,19 @@ class CLVCalculator:
         m: int,
         init_tangents: Optional[torch.Tensor] = None,
     ) -> Tuple[List[np.ndarray], List[torch.Tensor], List[int]]:
-        """Forward integration collecting Q (CPU float32) and R (GPU float16) every qr_interval steps.
+        """Run the Ginelli forward pass and store QR factors.
+
+        Args:
+            initial_state: Initial condition for the nonlinear system.
+            total_steps: Number of RK4 steps to integrate.
+            m: Number of tangent directions to propagate.
+            init_tangents: Optional custom initial tangent basis.
 
         Returns:
-            Q_list: list of Q matrices (numpy arrays float32) stored on CPU
-            R_half_list: list of R matrices stored as torch.float16 on the configured device
-            qr_steps: list of global step indices where QR was performed (in increasing order)
+            ``(Q_list, R_half_list, qr_steps)`` where ``Q_list`` contains CPU
+            ``float32`` NumPy arrays, ``R_half_list`` contains device-resident
+            half-precision triangular factors, and ``qr_steps`` stores the step
+            indices at which QR was performed.
         """
         device = self.device
         n = self.n
@@ -156,10 +170,14 @@ class CLVCalculator:
         return Q_list, R_half_list, qr_steps
 
     def _solve_triangular(self, R: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
-        """Solve upper-triangular system R X = B for X. R is (m,m), B is (m, m) or (m, k)
+        """Solve an upper-triangular linear system for the Ginelli recursion.
 
-        Attempts to use torch.linalg.solve_triangular if available, else falls back to
-        torch.triangular_solve (older API). Works on the provided device/dtype.
+        Args:
+            R: Upper-triangular factor from QR, shape ``(m, m)``.
+            B: Right-hand side with shape ``(m, m)`` or ``(m, k)``.
+
+        Returns:
+            The solution ``X`` to ``R X = B``.
         """
         try:
             # PyTorch >=1.9
@@ -176,16 +194,24 @@ class CLVCalculator:
         qr_steps: List[int],
         leading_m: Optional[int] = None,
     ) -> List[np.ndarray]:
-        """Backward pass to reconstruct CLVs at stored QR times.
+        """Run the Ginelli backward pass and reconstruct CLVs.
+
+        The backward recursion starts from ``C = I`` at the final QR slice and
+        repeatedly solves ``R_k C_{k-1} = C_k``. Normalizing the columns after
+        each solve keeps the coordinates well-scaled while preserving the
+        covariant directions. The resulting CLVs are recovered by multiplying
+        the stored QR basis with the reconstructed coordinate matrices:
+        ``V_k = Q_k C_k``.
 
         Args:
-            Q_list: list of Q matrices as numpy arrays (float32) on CPU
-            R_half_list: list of R matrices as torch tensors (float16) on device
-            qr_steps: list of corresponding step indices
-            leading_m: if provided, only reconstruct the leading `leading_m` CLVs (<= m)
+            Q_list: QR ``Q`` factors stored during the forward pass.
+            R_half_list: QR ``R`` factors stored during the forward pass.
+            qr_steps: Step indices corresponding to each QR slice.
+            leading_m: If provided, only reconstruct the leading ``leading_m``
+                CLVs.
 
         Returns:
-            clv_list: list of CLV arrays (shape (n, m_recon)) at each stored time in Q_list order
+            A list of CLV arrays with shape ``(n, leading_m)``.
         """
         device = self.device
         m = R_half_list[0].shape[0]
@@ -240,9 +266,20 @@ class CLVCalculator:
         K: int = 10,
         out_prefix: str = 'output/clv_angles_K',
     ) -> np.ndarray:
-        """Compute pairwise transversality angles between leading K CLVs for each stored time.
+        """Compute minimum pairwise transversality angles for the leading CLVs.
 
-        Saves npy to {out_prefix}{K}.npy and returns the time-series of minimum angles (radians).
+        For each stored time, the first ``K`` CLVs are normalized and their
+        absolute pairwise dot products are converted to angles via ``arccos``.
+        The minimum angle acts as a simple transversality diagnostic: small
+        angles indicate near-tangencies among the leading covariant directions.
+
+        Args:
+            clv_list: CLV arrays returned by :meth:`run_backward_reconstruct`.
+            K: Number of leading CLVs to include in the angle diagnostic.
+            out_prefix: Output prefix for the ``.npy`` file.
+
+        Returns:
+            A one-dimensional NumPy array of minimum angles in radians.
         """
         _ensure_dir(os.path.dirname(out_prefix) or '.')
         m_available = clv_list[0].shape[1]
