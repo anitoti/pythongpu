@@ -8,6 +8,8 @@ venv/
 
 #  Code local config
 ./
+# Claude Code local config
+.claude/
 
 # Python caches / compiled
 __pycache__/

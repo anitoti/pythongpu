@@ -30,7 +30,7 @@ python3 -m pythongpu.pipeline.lorenz_sweep \
     --grid-n 361 \
     --k-clusters 4 \
     --coupling 0.5 \
-    --dti-path data/DTI_A.mat \
+    --dti-path data/DTI-og.mat \
     --outdir data/
 
 echo "Lorenz Simulation Run Complete!"

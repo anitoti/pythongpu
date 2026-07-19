@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Explicit adjacency-list report for the DTI_A structural connectome.
+Explicit adjacency-list report for the DTI-og structural connectome (professor original).
 
-Loads ``data/DTI_A.mat`` (an 83 x 83 symmetric binary Desikan-Killiany
+Loads ``data/DTI-og.mat`` (an 83 x 83 symmetric binary Desikan-Killiany
 connectome), enumerates every undirected edge (i, j), i < j, where A_ij > 0,
 and maps each endpoint to its Desikan-Killiany region label under the
 convention documented in :mod:`pythongpu.networks.desikan_killiany`.
@@ -10,7 +10,7 @@ convention documented in :mod:`pythongpu.networks.desikan_killiany`.
 Usage
 -----
     python3 scripts/run_dti_adjacency.py
-    python3 scripts/run_dti_adjacency.py --mat data/DTI_A.mat --var A
+    python3 scripts/run_dti_adjacency.py --mat data/DTI-og.mat --var A
     python3 scripts/run_dti_adjacency.py --labels my_lut.txt --out edges.tsv
 
 The numeric node indices are authoritative; the region labels reflect an
@@ -44,7 +44,7 @@ def load_adjacency(mat_path: str, var: str) -> np.ndarray:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--mat", default="data/DTI_A.mat", help="path to DTI_A.mat")
+    ap.add_argument("--mat", default="data/DTI-og.mat", help="path to DTI-og.mat (original professor-provided DTI)")
     ap.add_argument("--var", default="A", help="matrix variable name inside the .mat")
     ap.add_argument("--labels", default=None,
                     help="optional index->label lookup (one label per line)")

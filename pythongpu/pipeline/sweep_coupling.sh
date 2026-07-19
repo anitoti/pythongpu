@@ -10,7 +10,7 @@ export PYTHONPATH=.
 
 GRID_N=361
 K_CLUSTERS=4
-DTI_PATH="data/DTI_A.mat"
+DTI_PATH="data/DTI-og.mat"
 OUT_DIR="data/"
 
 # Loop from 0 to 100 to scale coupling strength from 0.00 to 1.00

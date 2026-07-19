@@ -305,7 +305,7 @@ F541 [*] f-string without any placeholders
 413 |           f"(chaotic-bursting a=1 b=3 c=1 d=5 s=4 r=0.006 I=3.2)")
     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 414 |
-415 |     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+415 |     # ── load DTI-og.mat and build Laplacian ───────────────────────────────
     |
 help: Remove extraneous `f` prefix
 
@@ -626,7 +626,7 @@ F541 [*] f-string without any placeholders
 407 |     print(f"[variant]  Rössler X-coupled  (canonical chaotic a=0.2 b=0.2 c=5.7)")
     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 408 |
-409 |     # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+409 |     # ── load DTI-og.mat and build Laplacian ───────────────────────────────
     |
 help: Remove extraneous `f` prefix
 

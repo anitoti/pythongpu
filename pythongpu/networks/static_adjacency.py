@@ -16,10 +16,10 @@ def load_dti_laplacian(
     device   : torch.device,
 ) -> tuple[torch.Tensor, int]:
     """
-    Load DTI_A.mat, build the weighted graph Laplacian, return (L, n).
+    Load DTI-og.mat (professor original), build the weighted graph Laplacian, return (L, n).
 
     Replicates the MATLAB preamble exactly:
-        load('DTI_A.mat')
+        load('DTI-og.mat')
         A = double(A)
         n = size(A, 2)
         L = diag(sum(A, 2)) - A
@@ -42,7 +42,7 @@ def load_dti_laplacian(
 
     Args
     ----
-    mat_path : path to DTI_A.mat  (variable named 'A')
+    mat_path : path to DTI-og.mat  (variable named 'A')  # original professor-provided DTI matrix
     device   : torch.device
 
     Returns
@@ -52,7 +52,7 @@ def load_dti_laplacian(
     """
     mat = loadmat(mat_path)
 
-    # [Page 28, full_.m_script.pdf: "load('DTI_A.mat') A = double(A)"]
+    # [Page 28, full_.m_script.pdf: "load('DTI-og.mat') A = double(A)"]
     A = mat["A"].astype(np.float64)
     n = A.shape[1]                      # "n = size(A,2)"
     print(f"[dti]      loaded {mat_path}  raw shape={A.shape}  n={n}")

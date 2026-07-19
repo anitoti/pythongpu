@@ -697,6 +697,117 @@ combinatorially many. And the label is a FACT, not an estimate — that's what k
 every clustering problem in this talk. ~2 min.}
 
 % ═════════════════════════════════════════════════════════ 16b
+\begin{frame}{CLV diagnostics: Ginelli's algorithm (implementation)}
+  \GeoPanels
+  \vspace{0.15cm}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \begin{block}{Algorithm overview}
+        \footnotesize
+        Ginelli's method recovers covariant Lyapunov vectors (CLVs) via a two-pass
+        integration:
+        \begin{enumerate}\setlength\itemsep{2pt}
+          \item Forward pass: integrate the nonlinear state and a set of tangent
+                vectors simultaneously (batched RK4). Every $q$ steps perform a QR
+                factorisation $T=QR$ to re-orthonormalise the tangents.
+          \item Store the upper-triangular $R_n$ factors (on-GPU, in \texttt{float16}
+                to save VRAM) and the orthonormal $Q_n$ bases (offloaded to CPU).
+          \item Backward pass: recurse $C_{n-1}=\text{solve}(R_n, C_n)$ with
+                column-wise normalisation; the CLVs at time $n$ are $V_n=Q_n C_n$.
+        \end{enumerate}
+      \end{block}
+      \begin{block}{Practical choices (this repo)}
+        \footnotesize
+        \begin{itemize}\setlength\itemsep{2pt}
+          \item Batched RK4 kernel reuses the project's integrator and Jacobian API.
+          \item QR performed every \textbf{10} steps (configurable).
+          \item R matrices stored as \texttt{torch.float16} on GPU; Q as \texttt{numpy.float32} on CPU.
+          \item Backward linear solves cast R to \texttt{float32} for numerics then normalise columns.
+        \end{itemize}
+      \end{block}
+    \column{0.43\textwidth}
+      \centering
+      \fig{clv_pipeline.png}{Forward QR every 10 steps; store R\_n in half precision; backward solve to reconstruct CLVs.}
+  \end{columns}
+  \vfill
+  Implementation: CLVCalculator (see \texttt{\detokenize{pythongpu/pipeline/clv_diagnostics.py}}) implements these steps and provides CLV transversality diagnostics.
+\end{frame}
+
+\begin{frame}{CLV transversality and riddled basins}
+  \GeoPanels
+  \vspace{0.15cm}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \begin{block}{Transversality angles}
+        \footnotesize
+        Given CLVs $v_i(t)$, compute pairwise angles $\theta_{ij}(t)=\arccos\big(|\langle v_i,v_j\rangle|\big)$.
+        Small angles (near $0$) indicate near-tangencies in tangent space and are a
+        precursor to basin riddling: loss of hyperbolicity and nearby trajectories
+        becoming indistinguishable along unstable directions.
+      \end{block}
+      \begin{block}{Diagnostics produced}
+        \footnotesize
+        The pipeline computes the time-series of the minimum angle among the
+        leading $K$ CLVs and writes it to \texttt{\detokenize{output/clv_angles_K{K}.npy}}.
+        Statistical summaries (fraction of times \(\min\theta<\epsilon\), median, and quantiles)
+        are used to detect transitions into riddled regimes.
+      \end{block}
+    \column{0.43\textwidth}
+      \centering
+      \fig{clv_angles_example.png}{Example min-angle time series; sustained drops toward 0 indicate tangencies and potential riddling.}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Parallel SLURM deployment and null-model comparison}
+  \GeoPanels
+  \vspace{0.12cm}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+      \begin{block}{ACRES deployment}
+        \footnotesize
+        The CLV pipeline is exposed as a console command \texttt{pythongpu-clv} and
+        wrapped in SLURM sbatch scripts for ACRES. Example scripts:
+        \begin{itemize}\setlength\itemsep{2pt}
+          \item \texttt{\detokenize{scripts/run_clv_sweep.sh}}: DTI connectome sweep (1 GPU, 12G, 6h).
+          \item \texttt{\detokenize{scripts/run_clv_null_sweep.sh}}: scale-free null-model sweep (same resources).
+        \end{itemize}
+        Each job runs a coupling sweep $K\in[0.05,0.20]$ and stores per-run CLV angle series
+        and summaries under \texttt{output/} for later analysis.
+      \end{block}
+      \begin{block}{Null-model rationale}
+        \footnotesize
+        To test whether riddling is a specific property of the DTI wiring or a
+        generic feature of dense networks, we compare the 83-node human connectome
+        against a Barab\'asi--Albert scale-free graph (\texttt{\detokenize{generate_ba_graph(n=83,m=6)}}),
+        chosen to approximate edge density. The null sweep re-runs the identical
+        CLV analysis on the BA topology.
+      \end{block}
+    \column{0.42\textwidth}
+      \centering
+      \fig{clv_sweep_layout.png}{Parallel jobs: one GPU per $K$, outputs collected under \texttt{output/}.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Comparing DTI vs scale-free null model}
+  \GeoPanels
+  \vspace{0.12cm}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \begin{block}{What to compare}
+        \footnotesize
+        For each coupling $K$ we compare:
+        \begin{itemize}\setlength\itemsep{2pt}
+          \item min-CLV-angle time-series and its statistics (median, quantiles, fraction below $\epsilon$)
+          \item timing of sustained angle collapses vs the locking onset (from basin counts)
+          \item whether rattling/tangencies are topology-dependent (DTI vs BA)
+        \end{itemize}
+      \end{block}
+    \column{0.44\textwidth}
+      \centering
+      \fig{clv_compare_placeholder.png}{Planned figure: min-angle statistics across $K$ for DTI and BA null model.}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Where Does the Locking Switch On?}
   \GeoPanels
   \vspace{0.1cm}

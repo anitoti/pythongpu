@@ -4,7 +4,7 @@ Van der Pol coupling sweep driver.
 
 Loads a structural connectivity matrix ("subject 01" analog — see
 pipeline/run_vdp_sweep.sh; no subject-tagged fMRI timeseries exists in
-this repo yet, so DTI_A.mat stands in, same as the Lorenz/Rossler
+this repo yet, so DTI-og.mat stands in (professor original), same as the Lorenz/Rossler
 sweeps), builds its graph Laplacian, and integrates a VanDerPolNetwork
 across a range of coupling strengths, logging progress and saving
 per-coupling final-state summaries.
@@ -40,7 +40,7 @@ def synchronization_index(state: torch.Tensor) -> float:
 
 def main():
     ap = argparse.ArgumentParser(description="Van der Pol network coupling sweep.")
-    ap.add_argument("--dti-path", type=str, default="data/DTI_A.mat", help="Path to structural connectivity .mat file.")
+    ap.add_argument("--dti-path", type=str, default="data/DTI-og.mat", help="Path to structural connectivity .mat file.")
     ap.add_argument("--mu", type=float, default=1.5, help="Van der Pol nonlinearity/damping parameter (reference default: 1.5).")
     ap.add_argument("--coupling-min", type=float, default=0.0, help="Minimum coupling strength.")
     ap.add_argument("--coupling-max", type=float, default=1.0, help="Maximum coupling strength.")
