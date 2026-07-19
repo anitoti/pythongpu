@@ -6,7 +6,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import chi2
 from tqdm import tqdm
@@ -148,6 +147,7 @@ def _process_single_target(args):
 # ---------------------------------------------------------------------------
 def plot_causal_heatmap(adj_matrix: np.ndarray, out_path: str) -> None:
     """Plot directed weighted adjacency matrix as a heatmap."""
+    import seaborn as sns  # plotting-only dep; kept out of the core-estimator import path
     n_regions = adj_matrix.shape[0]
     plt.figure(figsize=(10, 8))
     sns.heatmap(

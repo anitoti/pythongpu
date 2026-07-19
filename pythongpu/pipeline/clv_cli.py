@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import torch
 import numpy as np
 
-from pythongpu.pipeline.clv_diagnostics import CLVCalculator
+from pythongpu.pipeline.clv_topology import run_clv_topology
 from pythongpu.networks.static_adjacency import load_dti_laplacian
 from pythongpu.networks.random_graphs import generate_ba_graph
-from pythongpu.oscillators.lorenz import LorenzNetwork
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,96 +30,42 @@ def main(argv: list[str] | None = None) -> None:
 
     # Load Laplacian (L) and node count
     if args.null_model:
-        # Use BA scale-free null model with parameters chosen to roughly match connectome density
-        # BA parameter m controls edges added per new node; m=6 is a reasonable starting point for n=83
+        # BA scale-free null model; m=6 roughly matches the DTI connectome density at n=83
         print('Using BA scale-free null model (n=83, m=6)')
         L = generate_ba_graph(n=83, m=6, device=device, plot=False)
         N = L.shape[0]
+        label = 'BA null model'
     else:
         L, N = load_dti_laplacian(args.mat, device=device)
+        label = 'DTI connectome'
 
-    # build Lorenz network with user-specified coupling
-    lor = LorenzNetwork(L, device=device, coupling=args.coupling)
+    print('Running forward integration + CLV reconstruction + topology...')
+    summary = run_clv_topology(
+        L, N, coupling=args.coupling, steps=args.steps, m=args.m, K=args.K,
+        qr_interval=args.qr_interval, device=device,
+        out_prefix=str(outdir / 'clv_angles_'), label=label,
+    )
 
-    # wrap rhs and jac to operate on flat state vector of size 3*N
-    def rhs_flat(state_flat: torch.Tensor) -> torch.Tensor:
-        # state_flat shape (3*N,)
-        x = state_flat.view(1, 3, N).to(device=device, dtype=torch.float32)
-        dx = lor.rhs(x)  # shape (1,3,N)
-        return dx.view(3 * N)
+    exps = np.asarray(summary['lyapunov_exponents'])
+    riddle = summary['riddling']
+    print(f'\n=== Topological summary [{label}, coupling={args.coupling}] ===')
+    print(f'  leading exponents : {np.round(exps[:min(5, len(exps))], 4)}')
+    print(f'  positive exponents: {summary["n_positive_exponents"]} / {args.m} computed  ->  '
+          f'{"chaotic" if summary["n_positive_exponents"] >= 1 else "non-chaotic"}')
+    if summary['kaplan_yorke_is_ceiling']:
+        print(f'  Kaplan–Yorke dim  : >= {args.m} (CEILING — running exponent sum '
+              f'still positive at all {args.m} computed CLVs; rerun with larger '
+              f'--m to resolve D_KY)')
+    else:
+        print(f'  Kaplan–Yorke dim  : {summary["kaplan_yorke_dimension"]:.4f}')
+    print(f'  riddling verdict  : {riddle["verdict"]}  '
+          f'(burst_fraction={riddle["burst_fraction"]:.3f}, '
+          f'centroid_sep={riddle["centroid_separation_rad"]:.3f} rad)')
 
-    def jac_flat(state_flat: torch.Tensor) -> torch.Tensor:
-        # analytic Jacobian for Lorenz network with diffusive coupling applied to X component
-        s = state_flat.view(3, N)
-        X = s[0, :]
-        Y = s[1, :]
-        Z = s[2, :]
-        sigma = lor.sigma
-        rho = lor.rho
-        beta = lor.beta
-        coupling = lor.coupling
-
-        # build block Jacobian of shape (3N,3N)
-        n3 = 3 * N
-        J = torch.zeros((n3, n3), dtype=torch.float32, device=device)
-
-        # indices helpers
-        def idx(i, comp):
-            # comp: 0->x,1->y,2->z
-            return comp * N + i
-
-        # Fill blocks
-        # For i,j nodes:
-        # d(dX_i)/dX_j = -sigma*delta_ij - coupling * L[i,j]
-        # d(dX_i)/dY_j = sigma*delta_ij
-        # d(dX_i)/dZ_j = 0
-        # d(dY_i)/dX_j = (rho - Z_i) * delta_ij
-        # d(dY_i)/dY_j = -delta_ij
-        # d(dY_i)/dZ_j = -X_i * delta_ij
-        # d(dZ_i)/dX_j = Y_i * delta_ij
-        # d(dZ_i)/dY_j = X_i * delta_ij
-        # d(dZ_i)/dZ_j = -beta * delta_ij
-
-        # Precompute diagonal contributions
-        for i in range(N):
-            for j in range(N):
-                delta = 1.0 if i == j else 0.0
-                Lij = float(L[i, j].item())
-                J[idx(i, 0), idx(j, 0)] = (-sigma * delta) - coupling * Lij
-                J[idx(i, 0), idx(j, 1)] = sigma * delta
-                J[idx(i, 0), idx(j, 2)] = 0.0
-
-                J[idx(i, 1), idx(j, 0)] = (rho - float(Z[i].item())) * delta
-                J[idx(i, 1), idx(j, 1)] = -1.0 * delta
-                J[idx(i, 1), idx(j, 2)] = -float(X[i].item()) * delta
-
-                J[idx(i, 2), idx(j, 0)] = float(Y[i].item()) * delta
-                J[idx(i, 2), idx(j, 1)] = float(X[i].item()) * delta
-                J[idx(i, 2), idx(j, 2)] = -beta * delta
-
-        return J
-
-    n_total = 3 * N
-    # initial state: small random seed for reproducibility
-    rng = torch.Generator(device='cpu')
-    rng.manual_seed(0)
-    init_state = 0.1 * torch.randn(n_total, dtype=torch.float32, generator=rng)
-
-    # Instantiate CLVCalculator
-    clv_calc = CLVCalculator(rhs_fn=rhs_flat, jac_fn=jac_flat, n=n_total, dt=lor.dt, device=device, qr_interval=args.qr_interval)
-
-    print('Running forward integration...')
-    Q_list, R_half_list, qr_steps = clv_calc.run_forward(initial_state=init_state, total_steps=args.steps, m=args.m)
-
-    print('Reconstructing CLVs...')
-    clv_list = clv_calc.run_backward_reconstruct(Q_list=Q_list, R_half_list=R_half_list, qr_steps=qr_steps, leading_m=args.m)
-
-    print(f'Computing transversality angles (K={args.K}) and saving to output...')
-    out_prefix = str(Path(outdir) / 'clv_angles_')
-    min_angles = clv_calc.compute_transversality_angles(clv_list, K=args.K, out_prefix=out_prefix)
-
-    out_file = Path(f"{out_prefix}{min(args.K, args.m)}.npy")
-    print(f'Done. Saved min-angle time series to {out_file}')
+    summary_path = outdir / 'clv_topology_summary.json'
+    with open(summary_path, 'w') as fh:
+        json.dump(summary, fh, indent=2)
+    print(f'Saved topological summary to {summary_path}')
 
 
 if __name__ == '__main__':
