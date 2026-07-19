@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
 """
-Entropic Regression (ER) for directed brain-network reconstruction.
+Entropic regression for directed brain-network reconstruction.
 
-Method: Fish, DeWitt, AlMomani, Laurienti & Bollt (2021), "Entropic regression
-with neurologically motivated applications," Chaos 31, 113105. ER recovers the
-DIRECTED information-flow graph among parcellated regions and was shown there to
-out-recover correlation and LASSO on DTI-coupled Kuramoto brain models.
+Entropic regression (ER) is the forward-then-backward variant of optimal
+causation entropy (oCSE). The forward pass greedily grows each target node's
+causal parent set by adding the lagged source that maximally reduces the
+target's conditional entropy, provided the gain is significant. The backward
+pass then removes redundant sources by re-testing each retained source while
+conditioning on the others. A source survives only if its conditional mutual
+information with the target remains significant after the rest of the selected
+set has been accounted for.
 
-Relation to the existing oCSE module (processing/causation_entropy.py):
-  - causation_entropy.py implements only the FORWARD greedy pass of optimal
-    causation entropy: keep adding the source that maximally reduces the
-    target's conditional entropy while the added causation entropy is
-    significant.
-  - Entropic regression adds a BACKWARD elimination pass: after the forward
-    aggregation over-selects, re-test every kept source conditioned on all the
-    *others* and drop any whose causation entropy is no longer significant.
-    Forward-then-backward is what removes indirect/spurious edges that a purely
-    forward sweep leaves behind — this is the ER contribution.
+This implementation follows Fish, DeWitt, AlMomani, Laurienti & Bollt (2021),
+"Entropic regression with neurologically motivated applications," Chaos 31,
+113105.
 
-Edge semantics (matches causation_entropy.py so the two are interchangeable
-downstream):
-    adj[source, sink] = CMI weight of the retained lagged edge source -> sink.
+Relation to the existing oCSE backend (``processing/causation_entropy.py``):
+    - oCSE implements only the forward greedy aggregation step.
+    - ER adds the backward elimination step that prunes indirect or spurious
+      edges left behind by the greedy sweep.
 
-The Gaussian conditional-mutual-information / significance estimators are reused
-from causation_entropy.py rather than re-derived, so ER and oCSE share one
-entropy backend.
+Edge semantics match ``causation_entropy.py`` so the two outputs are
+interchangeable downstream:
+    ``adj[source, sink] = CMI weight of the retained lagged edge source -> sink``
 """
 
 from __future__ import annotations
@@ -51,8 +49,29 @@ logging.basicConfig(
 )
 
 
-def _forward_pass(target, X_current, X_lagged, n_regions, n_samples, alpha):
-    """Standard oCSE forward aggregation: greedily grow the causal set."""
+def _forward_pass(
+    target: int,
+    X_current: np.ndarray,
+    X_lagged: np.ndarray,
+    n_regions: int,
+    n_samples: int,
+    alpha: float,
+) -> tuple[list[int], dict[int, float]]:
+    """Run the greedy forward oCSE pass for one target node.
+
+    Args:
+        target: Index of the sink region being reconstructed.
+        X_current: Target-aligned samples at times ``t``.
+        X_lagged: Candidate sources at times ``t-1``.
+        n_regions: Number of ROIs in the parcellation.
+        n_samples: Number of time samples after lag alignment.
+        alpha: Significance level for the conditional-mutual-information test.
+
+    Returns:
+        A pair ``(causal_set, weights)`` where ``causal_set`` contains the
+        accepted source indices and ``weights[source]`` stores the retained CMI
+        value for that source.
+    """
     x_target = X_current[:, [target]]
     causal_set: list[int] = []
     weights: dict[int, float] = {}
@@ -76,13 +95,37 @@ def _forward_pass(target, X_current, X_lagged, n_regions, n_samples, alpha):
     return causal_set, weights
 
 
-def _backward_pass(target, causal_set, X_current, X_lagged, n_samples, alpha):
-    """ER backward elimination: drop any source that is redundant given the rest.
+def _backward_pass(
+    target: int,
+    causal_set: list[int],
+    X_current: np.ndarray,
+    X_lagged: np.ndarray,
+    n_samples: int,
+    alpha: float,
+) -> tuple[list[int], dict[int, float]]:
+    """Run the ER backward elimination pass.
 
-    For each retained source s, recompute CMI(s -> target | all other retained
-    sources). If it is no longer significant, s was an indirect/spurious pickup
-    from the forward greedy order and is removed. Re-weight the survivors with
-    their conditional-on-the-rest CMI (the honest direct-influence weight).
+    The backward pass tests each retained source ``s`` against the conditioning
+    set formed by the other retained sources. If ``I(X_t; X_{s,t-1} | Z)`` is no
+    longer significant, then ``s`` is treated as redundant and removed.
+
+    This is the mechanism that turns the greedy forward sweep into a true
+    forward-then-backward selector: indirect edges that only appeared useful
+    because a missing mediator was absent from the conditioning set are pruned
+    away once the mediator has been admitted.
+
+    Args:
+        target: Index of the sink region being reconstructed.
+        causal_set: Sources selected by the forward pass.
+        X_current: Target-aligned samples at times ``t``.
+        X_lagged: Candidate sources at times ``t-1``.
+        n_samples: Number of time samples after lag alignment.
+        alpha: Significance level for the conditional-mutual-information test.
+
+    Returns:
+        A pair ``(kept, weights)`` where ``kept`` is the pruned source list and
+        ``weights[source]`` stores the backward-pass CMI conditioned on the
+        remaining retained sources.
     """
     x_target = X_current[:, [target]]
     kept = list(causal_set)
@@ -103,7 +146,10 @@ def _backward_pass(target, causal_set, X_current, X_lagged, n_samples, alpha):
     return kept, new_weights
 
 
-def _process_single_target(args):
+def _process_single_target(
+    args: tuple[int, np.ndarray, np.ndarray, int, int, float]
+) -> tuple[int, list[tuple[int, float]]]:
+    """Reconstruct the incoming edges for a single sink node."""
     target, X_current, X_lagged, n_regions, n_samples, alpha = args
     causal_set, _ = _forward_pass(target, X_current, X_lagged, n_regions, n_samples, alpha)
     kept, weights = _backward_pass(target, causal_set, X_current, X_lagged, n_samples, alpha)
@@ -116,18 +162,22 @@ def entropic_regression(
     alpha: float = 0.05,
     n_jobs: int = 4,
 ) -> np.ndarray:
-    """Reconstruct the directed edge-weighted adjacency via entropic regression.
+    """Reconstruct a directed weighted adjacency matrix with ER.
 
-    Parameters
-    ----------
-    timeseries : (T, N) array of parcellated ROI signals (z-scored upstream).
-    max_lag    : temporal lag enforcing cause-precedes-effect (Granger-style).
-    alpha      : significance level for the chi-squared causation-entropy test.
-    n_jobs     : worker processes (keep modest on shared HPC nodes).
+    The input is a ``(T, N)`` time series array. The series is shifted by
+    ``max_lag`` steps so each sink sample ``x_t`` is paired with its candidate
+    lagged sources ``x_{t-1}``. Each target ROI is reconstructed independently,
+    then the retained source weights are assembled into a directed adjacency
+    matrix with ``adj[source, sink]`` semantics.
 
-    Returns
-    -------
-    adj : (N, N) array, adj[source, sink] = retained ER causation-entropy weight.
+    Args:
+        timeseries: Parcellated ROI signals with shape ``(T, N)``.
+        max_lag: Temporal lag enforcing cause-precedes-effect.
+        alpha: Significance level for the chi-squared causation-entropy test.
+        n_jobs: Worker processes used for the per-target reconstruction.
+
+    Returns:
+        A ``(N, N)`` NumPy array of directed edge weights.
     """
     timeseries = np.asarray(timeseries, dtype=np.float64)
     n_timepoints, n_regions = timeseries.shape
@@ -163,19 +213,17 @@ def fuse_structural_functional(
     structural_adj: np.ndarray,
     mode: str = "gate",
 ) -> np.ndarray:
-    """Combine the ER functional graph with the DTI structural connectome.
+    """Fuse a functional ER graph with a structural connectome.
 
-    Matches the Fish/Bollt premise that information flow is *carried by* the
-    physical white-matter wiring: functional edges with no structural substrate
-    are down-weighted / removed.
+    Args:
+        functional_adj: Directed functional adjacency from entropic regression.
+        structural_adj: Structural adjacency or tractography matrix.
+        mode: Fusion rule. ``"gate"`` keeps functional edges only where a
+            structural edge exists. ``"weight"`` scales by row-normalized
+            structural weights.
 
-    mode:
-      "gate"     -> keep functional weight only where a structural edge exists
-                    (structural_adj > 0); a hard anatomical mask.
-      "weight"   -> multiply functional weight by the (row-normalised)
-                    structural weight; a soft anatomical prior.
-    Structural adjacency is assumed symmetric (undirected tractography); the
-    directedness comes entirely from the functional ER side.
+    Returns:
+        A fused adjacency matrix with the same shape as the inputs.
     """
     F = np.asarray(functional_adj, dtype=np.float64)
     S = np.asarray(structural_adj, dtype=np.float64)
@@ -190,7 +238,8 @@ def fuse_structural_functional(
     raise ValueError("mode must be 'gate' or 'weight'")
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, run ER, and write the outputs to disk."""
     ap = argparse.ArgumentParser(description="Entropic regression directed-network reconstruction.")
     ap.add_argument("--input", required=True, help="Parcellated timeseries CSV (T x N).")
     ap.add_argument("--out_csv", required=True, help="Output adjacency matrix CSV.")
