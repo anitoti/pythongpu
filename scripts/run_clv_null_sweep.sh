@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
-# SBATCH script for ACRES cluster: run CLV diagnostics null-model sweep on GPU
-# Requests: --gres=gpu:1, memory at least 16GB, walltime 8 hours
+#SBATCH --job-name=clv-null-sweep
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=08:00:00
+#
+# ---------------------------------------------------------------------------
+# CLV diagnostics null-model sweep on GPU (ACRES cluster).
+#
+# The #SBATCH block above MUST stay in this contiguous comment block at the very
+# top of the file, before the first executable line. sbatch stops scanning for
+# #SBATCH directives at the first non-comment line (`set -euo pipefail` below);
+# any directive placed after it is silently treated as an ordinary comment and
+# ignored. That is exactly what dropped earlier jobs onto the cluster's default
+# partition + its 15-minute walltime cap despite the 8-hour request here.
+#
+# Preferred submission path: scripts/submit_clv_sweep.sh null, which ALSO passes
+# -p gpu / -t 08:00:00 / --qos=<qos> as sbatch command-line flags. CLI flags
+# override the directives above and cannot be nullified by placement mistakes.
+#
 # Loads modules: Python/3.10.4-GCCcore-11.3.0, libjpeg-turbo
-# Robust shell options and logging
+# ---------------------------------------------------------------------------
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -16,14 +35,11 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "Starting CLV null-model sweep: $(date -u)"
 
-# Slurm SBATCH directives
-#SBATCH --job-name=clv-null-sweep
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
-#SBATCH --time=08:00:00
-#SBATCH --output=${LOGDIR}/slurm-%j.out
+# NOTE: SBATCH directives are declared at the very top of this file (above
+# `set -euo pipefail`). They must NOT be repeated here — below the first
+# executable line sbatch ignores #SBATCH lines entirely. Slurm's own stdout goes
+# to the path given by the wrapper's --output (or the default slurm-%j.out); the
+# tee'd $LOGFILE above is the rich, timestamped run log.
 
 # Load environment modules (ACRES example)
 module load Python/3.10.4-GCCcore-11.3.0 || true
