@@ -12,7 +12,7 @@ CLI, output artefacts and file names — with the Lorenz-63 vector field
 swapped for the canonical chaotic-bursting Hindmarsh–Rose neuron.
 
 Pipeline (mirrors lorenz_sweep.py exactly):
-  1. Load DTI_A.mat structural connectivity, build the graph Laplacian.
+  1. Load DTI-og.mat structural connectivity (professor original), build the graph Laplacian.
   2. Sweep a 2-D affine slice of the high-dimensional IC space.
   3. Integrate each IC forward with RK4 (explicit transient burn-in).
   4. Stream VPS features via Welford online mean/variance — no OOM.
@@ -37,7 +37,7 @@ Run:
     python3 -m pythongpu.pipeline.hr_sweep
     python3 -m pythongpu.pipeline.hr_sweep \
         --grid-n 64 --coupling 0.5 \
-        --dti-path data/DTI_A.mat \
+        --dti-path data/DTI-og.mat \
         --outdir /home/atotilca/pythongpu/data/hr/
 """
 
@@ -399,8 +399,8 @@ def main():
         help="Boxdiv2 survival probability.")
     ap.add_argument("--rewire-n",   type=int,   default=5,
         help="Edges to rewire in perturbation demo.")
-    ap.add_argument("--dti-path",   type=str,   default="data/DTI_A.mat",
-        help="Path to DTI_A.mat structural connectivity matrix.")
+    ap.add_argument("--dti-path",   type=str,   default="data/DTI-og.mat",
+        help="Path to DTI-og.mat structural connectivity matrix (professor original).")
     ap.add_argument("--outdir",     type=str,   default=".",
         help="Output directory for all files.")
     args = ap.parse_args()
@@ -411,7 +411,7 @@ def main():
     print("[variant]  Hindmarsh–Rose X-coupled  "
           "(chaotic-bursting a=1 b=3 c=1 d=5 s=4 r=0.006 I=3.2)")
 
-    # ── load DTI_A.mat and build Laplacian ───────────────────────────────
+    # ── load DTI-og.mat and build Laplacian (professor original) ───────────────────────────────
     L_gpu, n_dti = load_dti_laplacian(args.dti_path, device)
 
     # ── params — n_osc set from actual matrix size ───────────────────────
@@ -420,7 +420,7 @@ def main():
         n_osc    = n_dti,
     )
     print(
-        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI_A.mat)  "
+        f"[config]   grid={args.grid_n}²  N={p.n_osc} (from DTI-og.mat)  "
         f"coupling={p.coupling}  dt={p.dt}\n"
         f"           a={p.a}  b={p.b}  c={p.c}  d={p.d}  s={p.s}  "
         f"r={p.r}  x_rest={p.x_rest}  I={p.I}\n"

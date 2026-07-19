@@ -5,7 +5,7 @@ Fine coupling sweep of the DTI-coupled Lorenz basin geometry.
 Sweeps the Laplacian coupling strength K over a fine ladder in the
 near-critical window (default K in [0.45, 0.65]) while perturbing a specific
 pair of connectome nodes along the two axes of a 2-D initial-condition slice
-(default node 73 vs node 81 of ``DTI_A.mat``). For every K it
+(default node 73 vs node 81 of ``DTI-og.mat``). For every K it
 
     1. integrates the 65,536-IC slice on the GPU (RK4, transient burn-in),
     2. accumulates the VPS coherence features via Welford streaming,
@@ -171,7 +171,7 @@ def _fine_ladder(k_start: float, k_stop: float, k_step: float) -> np.ndarray:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dti-path", default="data/DTI_A.mat")
+    ap.add_argument("--dti-path", default="data/DTI-og.mat")
     ap.add_argument("--node-x", type=int, default=73, help="grid x-axis node")
     ap.add_argument("--node-y", type=int, default=81, help="grid y-axis node")
     ap.add_argument("--k-start", type=float, default=0.45)

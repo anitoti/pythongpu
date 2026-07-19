@@ -39,10 +39,10 @@ Legend: **Category** groups files by function. **Imports** are first-party (`pyt
 
 | Path | Invokes | Notes |
 |---|---|---|
-| `run_lorenz_gpu.sh` | `python3 lorenz_vps_clustering.py --grid-n 361 --k-clusters 4 --coupling 0.5 --dti-path data/DTI_A.mat --outdir data/` | **SLURM batch script** (`#SBATCH` header: `gpu` partition, 1 GPU, 32G, 2h). Activates `fmri_env/` venv (not `.venv/` — separate env, confirm it still exists on cluster). Sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. **Broken path** — see §1 warning; also calls script from repo root, not `src/pythongpu/`. |
+| `run_lorenz_gpu.sh` | `python3 lorenz_vps_clustering.py --grid-n 361 --k-clusters 4 --coupling 0.5 --dti-path data/DTI-og.mat --outdir data/` | **SLURM batch script** (`#SBATCH` header: `gpu` partition, 1 GPU, 32G, 2h). Activates `fmri_env/` venv (not `.venv/` — separate env, confirm it still exists on cluster). Sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. **Broken path** — see §1 warning; also calls script from repo root, not `src/pythongpu/`. |
 | `sweep_coupling.sh` | Loops `python ./src/pythongpu/lorenz_vps_clustering.py` over coupling 0.00→1.00 (101 runs) | Plain bash, no SBATCH header — likely run interactively or wrapped by another submission script. Same **broken path** issue, and references `src/pythongpu/` (inconsistent with `run_lorenz_gpu.sh`'s root-relative call). |
 
-**When reorganizing:** both scripts hardcode relative paths (`data/DTI_A.mat`, `data/`, `fmri_env/`) resolved from `$SLURM_SUBMIT_DIR` / cwd at submission time — any module move must keep these paths valid relative to wherever the script is submitted from, or the paths need to become absolute/env-var-driven.
+**When reorganizing:** both scripts hardcode relative paths (`data/DTI-og.mat`, `data/`, `fmri_env/`) resolved from `$SLURM_SUBMIT_DIR` / cwd at submission time — any module move must keep these paths valid relative to wherever the script is submitted from, or the paths need to become absolute/env-var-driven.
 
 ---
 
