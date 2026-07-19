@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SBATCH script for ACRES cluster: run CLV diagnostics null-model sweep on GPU
-# Requests: --gres=gpu:1, memory 12GB, walltime 6 hours
+# Requests: --gres=gpu:1, memory at least 16GB, walltime 8 hours
 # Loads modules: Python/3.10.4-GCCcore-11.3.0, libjpeg-turbo
 # Robust shell options and logging
 
@@ -18,10 +18,11 @@ echo "Starting CLV null-model sweep: $(date -u)"
 
 # Slurm SBATCH directives
 #SBATCH --job-name=clv-null-sweep
+#SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=12G
-#SBATCH --time=06:00:00
+#SBATCH --mem=16G
+#SBATCH --time=08:00:00
 #SBATCH --output=${LOGDIR}/slurm-%j.out
 
 # Load environment modules (ACRES example)
