@@ -18,12 +18,21 @@
 #
 #  Usage
 #  -----
-#    scripts/submit_clv_sweep.sh            # main sweep       (run_clv_sweep.sh)
-#    scripts/submit_clv_sweep.sh null       # null-model sweep (run_clv_null_sweep.sh)
-#    scripts/submit_clv_sweep.sh both       # submit both, back to back
+#    scripts/submit_clv_sweep.sh                 # main sweep, gpu partition
+#    scripts/submit_clv_sweep.sh null            # null-model sweep
+#    scripts/submit_clv_sweep.sh both            # submit both, back to back
 #
-#    # Override any default at submit time via environment variables:
-#    QOS=short PARTITION=gpu WALLTIME=04:00:00 scripts/submit_clv_sweep.sh
+#    # Optional 2nd positional arg = partition (wins over $PARTITION / gpu default):
+#    scripts/submit_clv_sweep.sh main general    # submit the main sweep to 'general'
+#
+#    # CPU partitions (e.g. general) have no GPUs: drop the GPU request with an
+#    # empty GRES so --gres is omitted (SLURM rejects --gres=gpu:1 on such nodes).
+#    # NB: the inner run_clv_*.sh still carry `#SBATCH --gres=gpu:1`; for a true
+#    # CPU run remove that directive too, else it re-requests a GPU.
+#    GRES= scripts/submit_clv_sweep.sh main general
+#
+#    # Any default is env-overridable:
+#    QOS=short WALLTIME=04:00:00 scripts/submit_clv_sweep.sh
 #
 #  IMPORTANT — confirm QOS before you rely on it
 #  ---------------------------------------------
@@ -39,13 +48,16 @@ set -euo pipefail
 
 MODE="${1:-main}"
 
-# --- Overridable submission parameters (env vars win over these defaults) -----
-PARTITION="${PARTITION:-gpu}"
+# --- Overridable submission parameters -----
+# Precedence for PARTITION: 2nd positional arg > $PARTITION env var > 'gpu'.
+PARTITION="${2:-${PARTITION:-gpu}}"
 WALLTIME="${WALLTIME:-08:00:00}"
 QOS="${QOS-normal}"           # <-- VERIFY against sacctmgr output; set QOS= to omit
                               # (no-colon form so an explicit empty QOS= is kept,
                               #  not replaced by the default, and omits the flag)
-GRES="${GRES:-gpu:1}"
+# GRES: no-colon form (like QOS) so an explicit empty GRES= is kept, not replaced
+# by the default — required for CPU partitions (e.g. general) that have no GPUs.
+GRES="${GRES-gpu:1}"
 CPUS="${CPUS:-4}"
 MEM="${MEM:-16G}"
 
@@ -62,19 +74,20 @@ submit_one() {
   # must already exist at submit time.
   mkdir -p "$logdir"
 
-  # Assemble sbatch flags. --qos is appended only when QOS is non-empty so an
-  # empty QOS cleanly falls back to the cluster default instead of erroring.
+  # Assemble sbatch flags. --gres and --qos are appended only when non-empty, so
+  # an empty override cleanly omits the flag instead of forcing gpu:1 (which
+  # SLURM rejects on CPU partitions) or passing an invalid QoS.
   local -a flags=(
     --job-name="$jobname"
     --partition="$PARTITION"
     --time="$WALLTIME"
-    --gres="$GRES"
     --cpus-per-task="$CPUS"
     --mem="$MEM"
     --chdir="$REPO_ROOT"
     --output="${logdir}/slurm-%j.out"
   )
-  [ -n "$QOS" ] && flags+=(--qos="$QOS")
+  [ -n "$GRES" ] && flags+=(--gres="$GRES")
+  [ -n "$QOS" ]  && flags+=(--qos="$QOS")
 
   echo "+ sbatch ${flags[*]} $script"
   sbatch "${flags[@]}" "$script"
@@ -92,7 +105,7 @@ case "$MODE" in
     submit_one scripts/run_clv_null_sweep.sh clv-null-sweep output/clv_null_results
     ;;
   *)
-    echo "usage: $0 [main|null|both]" >&2
+    echo "usage: $0 [main|null|both] [partition]" >&2
     exit 2
     ;;
 esac
