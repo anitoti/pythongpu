@@ -32,6 +32,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
+PINK_SPECTRUM_COLORS = ["#f8bbd0", "#f48fb1", "#ec407a", "#ad1457"]
+PINK_DKY_COLOR = "#b1126b"
+PINK_BURST_COLOR = "#e91e63"
+PINK_GRID = "#f3d7e3"
+PINK_ZERO = "#d46a9a"
+
+
 @dataclass(frozen=True)
 class CLVSummary:
     coupling: float
@@ -97,6 +104,8 @@ def _configure_matplotlib() -> None:
         "ytick.labelsize": 9,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
     })
@@ -107,40 +116,67 @@ def _save_figure(fig, output_path: Path) -> None:
     fig.savefig(output_path, format="png")
 
 
+def _zero_crossings(x: np.ndarray, y: np.ndarray) -> list[tuple[float, float]]:
+    crossings: list[tuple[float, float]] = []
+    for idx in range(len(y) - 1):
+        y0 = float(y[idx])
+        y1 = float(y[idx + 1])
+        if y0 == 0.0:
+            crossings.append((float(x[idx]), float(idx + 1)))
+            continue
+        if y0 * y1 < 0.0:
+            frac = y0 / (y0 - y1)
+            x_cross = float(x[idx] + frac * (x[idx + 1] - x[idx]))
+            index_cross = float((idx + 1) + frac)
+            crossings.append((x_cross, index_cross))
+    return crossings
+
+
 def _plot_spectrum_panel(ax, summaries: Iterable[CLVSummary]) -> None:
     summaries = list(summaries)
     couplings = np.array([item.coupling for item in summaries], dtype=float)
     spectra = [item.spectrum for item in summaries]
     n_modes = max(len(spec) for spec in spectra)
 
-    import matplotlib
-    from matplotlib import cm
-    from matplotlib.colors import Normalize
+    from matplotlib.colors import LinearSegmentedColormap
 
-    norm = Normalize(vmin=float(couplings.min()), vmax=float(couplings.max()))
-    cmap = matplotlib.colormaps["viridis"]
+    discrete_cmap = LinearSegmentedColormap.from_list(
+        "pink_bow",
+        PINK_SPECTRUM_COLORS,
+    )
+    discrete_colors = [discrete_cmap(v) for v in np.linspace(0.1, 0.95, len(summaries))]
 
-    for summary in summaries:
-        color = cmap(norm(summary.coupling))
+    for color, summary in zip(discrete_colors, summaries):
+        x_values = np.arange(1, len(summary.spectrum) + 1)
         ax.plot(
-            np.arange(1, len(summary.spectrum) + 1),
+            x_values,
             summary.spectrum,
             color=color,
             linewidth=1.6,
             alpha=0.95,
+            label=fr"$c={summary.coupling:g}$",
         )
+        for x_cross, idx_cross in _zero_crossings(x_values, summary.spectrum):
+            ax.annotate(
+                fr"$i={idx_cross:.2f}$",
+                xy=(x_cross, 0.0),
+                xytext=(0, 7),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color=color,
+                rotation=0,
+                clip_on=True,
+            )
 
-    ax.axhline(0.0, color="0.2", linewidth=0.9, linestyle="--", zorder=0)
+    ax.axhline(0.0, color=PINK_ZERO, linewidth=0.9, linestyle="--", zorder=0)
     ax.set_xlim(1, n_modes)
     ax.set_xlabel("Lyapunov exponent index")
     ax.set_ylabel("Lyapunov exponent")
     ax.set_title("Full m=83 Lyapunov spectrum across coupling")
-    ax.grid(True, axis="both", linewidth=0.4, alpha=0.35)
-
-    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
-    sm.set_array([])
-    cbar = ax.figure.colorbar(sm, ax=ax, pad=0.01)
-    cbar.set_label("Coupling strength")
+    ax.grid(True, axis="both", linewidth=0.4, alpha=0.35, color=PINK_GRID)
+    ax.legend(loc="upper right", frameon=False, title="Coupling")
 
 
 def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
@@ -156,7 +192,7 @@ def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
     ax.plot(
         couplings,
         dky_plot,
-        color="#1f77b4",
+        color=PINK_DKY_COLOR,
         linewidth=1.8,
         marker="o",
         markersize=5.5,
@@ -171,7 +207,7 @@ def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
             marker="^",
             s=70,
             facecolors="white",
-            edgecolors="#1f77b4",
+            edgecolors=PINK_DKY_COLOR,
             linewidths=1.2,
             label="Ceiling cases shown at 83",
             zorder=4,
@@ -181,7 +217,7 @@ def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
     ax2.plot(
         couplings,
         burst,
-        color="#d62728",
+        color=PINK_BURST_COLOR,
         linewidth=1.8,
         marker="s",
         markersize=5.0,
@@ -193,7 +229,7 @@ def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
     ax.set_ylabel("Kaplan–Yorke dimension $D_{KY}$")
     ax2.set_ylabel("Burst fraction")
     ax.set_title("Resolved dimension and riddling trend")
-    ax.grid(True, axis="both", linewidth=0.4, alpha=0.35)
+    ax.grid(True, axis="both", linewidth=0.4, alpha=0.35, color=PINK_GRID)
 
     upper = max(83.0, float(np.max(dky_plot)))
     ax.set_ylim(0.0, upper * 1.06)
@@ -201,7 +237,15 @@ def _plot_trend_panel(ax, summaries: Iterable[CLVSummary]) -> None:
 
     handles1, labels1 = ax.get_legend_handles_labels()
     handles2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(handles1 + handles2, labels1 + labels2, loc="upper left", frameon=False)
+    ax.legend(
+        handles1 + handles2,
+        labels1 + labels2,
+        loc="lower left",
+        frameon=True,
+        framealpha=0.0,
+        facecolor="none",
+        edgecolor="none",
+    )
 
 
 def build_figures(results_dir: Path, outdir: Path) -> list[Path]:
@@ -267,7 +311,7 @@ def parse_args() -> argparse.Namespace:
         "--outdir",
         type=Path,
         default=REPO_ROOT / "data" / "derivatives",
-        help="Directory where the PDF figures will be written.",
+        help="Directory where the PNG figures will be written.",
     )
     return parser.parse_args()
 
