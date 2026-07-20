@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=clv-null-sweep
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+# GPU count (--gres) is managed by scripts/submit_clv_sweep.sh so CPU-partition
+# runs can omit it. If you sbatch THIS file directly and need a GPU, add --gres=gpu:1.
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=08:00:00
