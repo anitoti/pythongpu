@@ -1,0 +1,19 @@
+Starting CLV sweep: Sun Jul 19 01:23:37 UTC 2026
+Running pythongpu-clv with coupling=0.05 at Sun Jul 19 01:23:39 UTC 2026
+[dti]      loaded data/DTI-og.mat  raw shape=(83, 83)  n=83
+[dti]      n=83 nodes  850 edges  max_weight=1.0000
+Running forward integration...
+Traceback (most recent call last):
+  File "/mnt/home/atotilca/.local/bin/pythongpu-clv", line 8, in <module>
+    sys.exit(main())
+  File "/mnt/home/atotilca/pythongpu/pythongpu/pipeline/clv_cli.py", line 112, in main
+    Q_list, R_half_list, qr_steps = clv_calc.run_forward(initial_state=init_state, total_steps=args.steps, m=args.m)
+  File "/mnt/home/atotilca/pythongpu/pythongpu/pipeline/clv_diagnostics.py", line 131, in run_forward
+    state, tangents = self._rk4_step(state, tangents)
+  File "/mnt/home/atotilca/pythongpu/pythongpu/pipeline/clv_diagnostics.py", line 69, in _rk4_step
+    J2 = self.jac_fn(s2)
+  File "/mnt/home/atotilca/pythongpu/pythongpu/pipeline/clv_cli.py", line 98, in jac_flat
+    J[idx(i, 2), idx(j, 2)] = -beta * delta
+  File "/mnt/home/atotilca/pythongpu/pythongpu/pipeline/clv_cli.py", line 67, in idx
+    def idx(i, comp):
+KeyboardInterrupt
