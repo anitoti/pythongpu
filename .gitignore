@@ -1,5 +1,13 @@
-# Large data — stays on the server only
-data/
+# Large data — stays on the server only.
+# We ignore the directory *contents* (data/*, not data/) so that specific
+# small files can be re-included below — Git will not descend into an ignored
+# directory, so `data/` would make the negations below dead letters.
+data/*
+# Exception: small structural-connectome fixtures (e.g. DTI-og.mat, ~1 KB)
+# are tracked because tests/test_null_models.py needs them as CI substrate.
+# HARD RULE: never commit a data file larger than 5 MB. The .git/hooks/pre-commit
+# guard enforces this; keep large arrays (.npy/.npz/.nii*) on the server only.
+!data/*.mat
 nilearn_cache/
 
 # Python virtual environment
