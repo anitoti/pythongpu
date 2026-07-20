@@ -21,6 +21,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument('--qr-interval', type=int, default=10, help='QR orthonormalization interval')
     parser.add_argument('--device', type=str, default=None, help='torch device (cpu or cuda)')
     parser.add_argument('--coupling', type=float, default=0.1, help='network coupling strength (passed to LorenzNetwork)')
+    parser.add_argument('--coupling-mode', type=str, default='x', choices=['x','xy','z','sigmoidal'], help='coupling mode: x, xy, z, or sigmoidal')
     parser.add_argument('--null-model', action='store_true', help='use a BA scale-free null model instead of the DTI connectome')
     args = parser.parse_args(argv)
 
@@ -40,15 +41,22 @@ def main(argv: list[str] | None = None) -> None:
         label = 'DTI connectome'
 
     print('Running forward integration + CLV reconstruction + topology...')
+
+    # Create mode/coupling-specific output directory so results are uniquely stored
+    coupling_str = f"c{args.coupling:.2f}".replace('.', '_')
+    mode_dir = outdir / args.coupling_mode / coupling_str
+    mode_dir.mkdir(parents=True, exist_ok=True)
+
     summary = run_clv_topology(
         L, N, coupling=args.coupling, steps=args.steps, m=args.m, K=args.K,
         qr_interval=args.qr_interval, device=device,
-        out_prefix=str(outdir / 'clv_angles_'), label=label,
+        out_prefix=str(mode_dir / 'clv_angles_'), label=label,
+        coupling_mode=args.coupling_mode,
     )
 
     exps = np.asarray(summary['lyapunov_exponents'])
     riddle = summary['riddling']
-    print(f'\n=== Topological summary [{label}, coupling={args.coupling}] ===')
+    print(f'\n=== Topological summary [{label}, coupling={args.coupling}, mode={args.coupling_mode}] ===')
     print(f'  leading exponents : {np.round(exps[:min(5, len(exps))], 4)}')
     print(f'  positive exponents: {summary["n_positive_exponents"]} / {args.m} computed  ->  '
           f'{"chaotic" if summary["n_positive_exponents"] >= 1 else "non-chaotic"}')
@@ -62,7 +70,7 @@ def main(argv: list[str] | None = None) -> None:
           f'(burst_fraction={riddle["burst_fraction"]:.3f}, '
           f'centroid_sep={riddle["centroid_separation_rad"]:.3f} rad)')
 
-    summary_path = outdir / 'clv_topology_summary.json'
+    summary_path = mode_dir / 'clv_topology_summary.json'
     with open(summary_path, 'w') as fh:
         json.dump(summary, fh, indent=2)
     print(f'Saved topological summary to {summary_path}')

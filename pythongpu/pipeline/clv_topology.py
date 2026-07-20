@@ -33,6 +33,7 @@ def lorenz_clv_closures(
     diffusive on the X component only (H = e_1 e_1^T), so the coupling term
     enters exactly one Jacobian block.
     """
+    # Preserve the Laplacian matrix and move to the target device without changing values
     L = lor.L.to(device=device, dtype=torch.float32)
 
     def rhs_flat(state_flat: torch.Tensor) -> torch.Tensor:
@@ -43,21 +44,50 @@ def lorenz_clv_closures(
         s = state_flat.view(3, N)
         X, Y, Z = s[0], s[1], s[2]
         sigma, rho, beta, coupling = lor.sigma, lor.rho, lor.beta, lor.coupling
+        mode = getattr(lor, 'coupling_mode', 'x')
         n3 = 3 * N
         J = torch.zeros((n3, n3), dtype=torch.float32, device=device)
         eye = torch.eye(N, dtype=torch.float32, device=device)
         xs, ys, zs = slice(0, N), slice(N, 2 * N), slice(2 * N, 3 * N)
-        # dX rows
-        J[xs, xs] = -sigma * eye - coupling * L
+
+        # dX rows -- depends on coupling mode
+        if mode == 'x':
+            J[xs, xs] = -sigma * eye - coupling * L
+        elif mode == 'xy':
+            J[xs, xs] = -sigma * eye - coupling * L
+        elif mode == 'z':
+            J[xs, xs] = -sigma * eye
+        elif mode == 'sigmoidal':
+            # Nonlinear sigmoidal coupling contributes a state-dependent Jacobian block
+            # Build sech^2 matrix: S[i,j] = sech^2(x_j - x_i) = 1 - tanh^2(x_j - x_i)
+            diff = X[None, :] - X[:, None]  # shape (N, N): row i col j = x_j - x_i
+            tanh_mat = torch.tanh(diff)
+            sech2 = 1.0 - tanh_mat * tanh_mat
+            A = L * sech2  # elementwise
+            df_matrix = A - torch.diag(A.sum(dim=1))
+            J[xs, xs] = -sigma * eye - coupling * df_matrix
+        else:
+            raise ValueError(f"Unknown coupling_mode in jacobian: {mode}")
+
+        # dX-dY block unchanged
         J[xs, ys] = sigma * eye
+
         # dY rows
         J[ys, xs] = torch.diag(rho - Z)
-        J[ys, ys] = -eye
+        if mode == 'xy':
+            J[ys, ys] = -eye - coupling * L
+        else:
+            J[ys, ys] = -eye
         J[ys, zs] = torch.diag(-X)
+
         # dZ rows
         J[zs, xs] = torch.diag(Y)
         J[zs, ys] = torch.diag(X)
-        J[zs, zs] = -beta * eye
+        if mode == 'z':
+            J[zs, zs] = -beta * eye - coupling * L
+        else:
+            J[zs, zs] = -beta * eye
+
         return J
 
     return rhs_flat, jac_flat
@@ -75,6 +105,7 @@ def run_clv_topology(
     device: torch.device,
     out_prefix: str,
     label: str,
+    coupling_mode: str = 'x',
     seed: int = 0,
 ) -> dict:
     """Run the full CLV topological diagnostic on a network Laplacian L.
@@ -84,7 +115,8 @@ def run_clv_topology(
     k-means riddling verdict. Saves the minimum-angle series to
     ``{out_prefix}{K}.npy`` via the CLVCalculator.
     """
-    lor = LorenzNetwork(L, device=device, coupling=coupling)
+    # Construct Lorenz network preserving the supplied Laplacian exactly
+    lor = LorenzNetwork(L, device=device, coupling=coupling, coupling_mode=coupling_mode)
     rhs_flat, jac_flat = lorenz_clv_closures(lor, N, device)
 
     clv = CLVCalculator(

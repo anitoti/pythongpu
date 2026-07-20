@@ -6,6 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=08:00:00
+#SBATCH --array=0-25
 #
 # ---------------------------------------------------------------------------
 # CLV diagnostics sweep on GPU (ACRES cluster).
@@ -68,17 +69,40 @@ DTI_PATH=${DTI_PATH:-data/DTI-og.mat}
 OUTDIR=${OUTDIR:-output/clv_results}
 mkdir -p "$OUTDIR"
 
-# Coupling sweep: if CLI supports --coupling, run for values 0.05..0.20 step 0.05
-COUPLINGS=(0.05 0.10 0.15 0.20)
+# Coupling sweep: generate couplings from 0.25 .. 1.50 in steps of 0.05
+# sequence length: inclusive 0.25..1.50 -> 26 values; sbatch array indices are 0..25
+COUPLINGS=()
+for i in $(seq 0 25); do
+  # compute 0.25 + i*0.05 using awk to avoid relying on bc
+  c=$(awk -v i="$i" 'BEGIN{printf "%.2f", 0.25 + i*0.05}')
+  COUPLINGS+=("$c")
+done
 
-for c in "${COUPLINGS[@]}"; do
+# If running as a Slurm array task, select the coupling by SLURM_ARRAY_TASK_ID
+if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+  idx=${SLURM_ARRAY_TASK_ID}
+  if [ -z "${COUPLINGS[$idx]:-}" ]; then
+    echo "ERROR: Invalid SLURM_ARRAY_TASK_ID=$idx" >&2
+    exit 1
+  fi
+  c=${COUPLINGS[$idx]}
+  echo "Array task id=${idx} selecting coupling=${c}"
   echo "Running pythongpu-clv with coupling=${c} at $(date -u)"
-  # if the CLI supports --coupling and --outdir / --mat, this will work; otherwise the CLI will error
-  pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 || {
-    echo "pythongpu-clv failed for coupling=${c}. Continuing to next value.";
-    continue
+  pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 --coupling-mode x || {
+    echo "pythongpu-clv failed for coupling=${c}. Exiting with non-zero status.";
+    exit 1
   }
   echo "Completed coupling=${c}"
-done
+else
+  # not running as an array -- run sequentially for convenience
+  for c in "${COUPLINGS[@]}"; do
+    echo "Running pythongpu-clv with coupling=${c} at $(date -u)"
+    pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 --coupling-mode x || {
+      echo "pythongpu-clv failed for coupling=${c}. Continuing to next value.";
+      continue
+    }
+    echo "Completed coupling=${c}"
+  done
+fi
 
 echo "CLV sweep finished: $(date -u)"

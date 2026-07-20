@@ -1,0 +1,50 @@
+Starting CLV sweep: Mon Jul 20 16:03:19 UTC 2026
+Running pythongpu-clv --m 30 with coupling=0.05 at Mon Jul 20 16:03:20 UTC 2026
+[dti]      loaded data/DTI-og.mat  raw shape=(83, 83)  n=83
+[dti]      n=83 nodes  850 edges  max_weight=1.0000
+Running forward integration + CLV reconstruction + topology...
+
+=== Topological summary [DTI connectome, coupling=0.05] ===
+  leading exponents : [0.4752 0.4326 0.397  0.3544 0.3475]
+  positive exponents: 83 / 83 computed  ->  chaotic
+  Kaplan–Yorke dim  : >= 83 (CEILING — running exponent sum still positive at all 83 computed CLVs; rerun with larger --m to resolve D_KY)
+  riddling verdict  : RIDDLED  (burst_fraction=0.820, centroid_sep=0.263 rad)
+Saved topological summary to output/clv_results/clv_c0_05/clv_topology_summary.json
+Completed coupling=0.05
+Running pythongpu-clv --m 30 with coupling=0.10 at Mon Jul 20 16:03:54 UTC 2026
+[dti]      loaded data/DTI-og.mat  raw shape=(83, 83)  n=83
+[dti]      n=83 nodes  850 edges  max_weight=1.0000
+Running forward integration + CLV reconstruction + topology...
+
+=== Topological summary [DTI connectome, coupling=0.1] ===
+  leading exponents : [0.5258 0.4667 0.4641 0.46   0.4549]
+  positive exponents: 74 / 83 computed  ->  chaotic
+  Kaplan–Yorke dim  : >= 83 (CEILING — running exponent sum still positive at all 83 computed CLVs; rerun with larger --m to resolve D_KY)
+  riddling verdict  : RIDDLED  (burst_fraction=0.050, centroid_sep=0.428 rad)
+Saved topological summary to output/clv_results/clv_c0_10/clv_topology_summary.json
+Completed coupling=0.10
+Running pythongpu-clv --m 30 with coupling=0.15 at Mon Jul 20 16:04:03 UTC 2026
+[dti]      loaded data/DTI-og.mat  raw shape=(83, 83)  n=83
+[dti]      n=83 nodes  850 edges  max_weight=1.0000
+Running forward integration + CLV reconstruction + topology...
+
+=== Topological summary [DTI connectome, coupling=0.15] ===
+  leading exponents : [0.6    0.4366 0.4307 0.3955 0.3842]
+  positive exponents: 34 / 83 computed  ->  chaotic
+  Kaplan–Yorke dim  : >= 83 (CEILING — running exponent sum still positive at all 83 computed CLVs; rerun with larger --m to resolve D_KY)
+  riddling verdict  : RIDDLED  (burst_fraction=0.470, centroid_sep=0.280 rad)
+Saved topological summary to output/clv_results/clv_c0_15/clv_topology_summary.json
+Completed coupling=0.15
+Running pythongpu-clv --m 30 with coupling=0.20 at Mon Jul 20 16:04:12 UTC 2026
+[dti]      loaded data/DTI-og.mat  raw shape=(83, 83)  n=83
+[dti]      n=83 nodes  850 edges  max_weight=1.0000
+Running forward integration + CLV reconstruction + topology...
+
+=== Topological summary [DTI connectome, coupling=0.2] ===
+  leading exponents : [0.4231 0.2562 0.2007 0.1969 0.1624]
+  positive exponents: 14 / 83 computed  ->  chaotic
+  Kaplan–Yorke dim  : 45.4000
+  riddling verdict  : RIDDLED  (burst_fraction=0.420, centroid_sep=0.346 rad)
+Saved topological summary to output/clv_results/clv_c0_20/clv_topology_summary.json
+Completed coupling=0.20
+CLV sweep finished: Mon Jul 20 16:04:20 UTC 2026
