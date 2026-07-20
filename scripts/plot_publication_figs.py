@@ -4,9 +4,9 @@
 The script scans a results tree containing per-coupling subdirectories with
 `clv_topology_summary.json`, then produces:
 
-1. A combined two-panel PDF with the full m=83 Lyapunov spectrum and the
+1. A combined two-panel PNG with the full m=83 Lyapunov spectrum and the
    Kaplan–Yorke / burst-fraction trends.
-2. Two single-panel companion PDFs for reuse in slides or manuscript
+2. Two single-panel companion PNGs for reuse in slides or manuscript
    assembly.
 
 By default, unresolved Kaplan–Yorke points are shown as the lower bound 83,
@@ -104,7 +104,7 @@ def _configure_matplotlib() -> None:
 
 def _save_figure(fig, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, format="pdf")
+    fig.savefig(output_path, format="png")
 
 
 def _plot_spectrum_panel(ax, summaries: Iterable[CLVSummary]) -> None:
@@ -226,7 +226,7 @@ def build_figures(results_dir: Path, outdir: Path) -> list[Path]:
     _plot_spectrum_panel(ax_spec, summaries)
     _plot_trend_panel(ax_trend, summaries)
 
-    combined_path = outdir / "plot_publication_figs__clv_riddling_summary.pdf"
+    combined_path = outdir / "plot_publication_figs__clv_riddling_summary.png"
     _save_figure(fig, combined_path)
     plt.close(fig)
     generated.append(combined_path)
@@ -234,7 +234,7 @@ def build_figures(results_dir: Path, outdir: Path) -> list[Path]:
     # Single-panel spectrum figure for direct reuse.
     fig_spec, ax_spec = plt.subplots(figsize=(7.2, 5.0), constrained_layout=True)
     _plot_spectrum_panel(ax_spec, summaries)
-    spectrum_path = outdir / "plot_publication_figs__clv_spectrum.pdf"
+    spectrum_path = outdir / "plot_publication_figs__clv_spectrum.png"
     _save_figure(fig_spec, spectrum_path)
     plt.close(fig_spec)
     generated.append(spectrum_path)
@@ -242,7 +242,7 @@ def build_figures(results_dir: Path, outdir: Path) -> list[Path]:
     # Single-panel trend figure for direct reuse.
     fig_trend, ax_trend = plt.subplots(figsize=(7.2, 4.8), constrained_layout=True)
     _plot_trend_panel(ax_trend, summaries)
-    trend_path = outdir / "plot_publication_figs__clv_trends.pdf"
+    trend_path = outdir / "plot_publication_figs__clv_trends.png"
     _save_figure(fig_trend, trend_path)
     plt.close(fig_trend)
     generated.append(trend_path)
