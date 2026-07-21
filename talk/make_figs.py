@@ -332,11 +332,42 @@ def fig_cartoon():
     save(fig, "basin_cartoon.png")
 
 
+# ── 10. The K=0.65 basin map: what riddled basins look like (measured) ────────
+def fig_basin_map():
+    # Real deterministic run: data/derivatives/lorenz_basins_n73_n81_K0.6500.npz
+    # 96x96 IC plane over the (node 73, node 81) coordinates. Colour each pixel
+    # by its FULL 83-node lobe pattern sign<X_i>. 8312 distinct patterns among
+    # 9216 ICs -> pure static, no connected regions at any scale.
+    src = Path(__file__).resolve().parents[1] / "data" / "derivatives" \
+        / "lorenz_basins_n73_n81_K0.6500.npz"
+    d = np.load(src, allow_pickle=True)
+    g = int(d["config"].item()["grid_n"])            # 96
+    mean_x = d["mean_x"].reshape(g, g, -1)           # (96,96,83), C-order (verified)
+    lo, hi = float(d["Xg"].min()), float(d["Xg"].max())
+
+    # Label each pixel by its exact 83-bit sign pattern, then remap to shuffled
+    # colour indices so distinct-but-adjacent patterns get well-separated colours.
+    bits = (mean_x > 0).reshape(g * g, -1)           # (9216, 83) boolean
+    uniq, inv = np.unique(bits, axis=0, return_inverse=True)
+    rng = np.random.default_rng(0)
+    shuffle = rng.permutation(len(uniq))
+    img = shuffle[inv].reshape(g, g)
+
+    fig, ax = plt.subplots(figsize=(6.2, 5.6))
+    ax.imshow(img, cmap="twilight_shifted", origin="lower",
+              extent=[lo, hi, lo, hi], interpolation="nearest")
+    ax.set(xlabel=r"IC of node 73  ($X$)", ylabel=r"IC of node 81  ($X$)",
+           title=f"Basin plane at $K=0.65$: {len(uniq)} distinct lobe patterns\n"
+                 f"among {g*g} initial conditions — pure static")
+    ax.grid(False)
+    save(fig, "basin_map_K065.png")
+
+
 if __name__ == "__main__":
     print("generating figures ->", FIGS)
     for f in (fig_benchmark, fig_alignment, fig_lobe_hist, fig_onset,
               fig_convergence, fig_persistence, fig_network, fig_lorenz,
-              fig_cartoon):
+              fig_cartoon, fig_basin_map):
         try:
             f()
         except Exception as exc:      # one bad figure must not kill the batch
