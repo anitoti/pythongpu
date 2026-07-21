@@ -14,11 +14,6 @@ nilearn_cache/
 .venv/
 venv/
 
-#  Code local config
-./
-#  Code local config
-./
-
 # Python caches / compiled
 __pycache__/
 *.pyc
@@ -31,3 +26,14 @@ __pycache__/
 *.nii.gz
 *.mif
 *.png
+
+# AI-generated metadata and sessions
+
+.claude*
+.copilot*
+.chatgpt*
+.anthropic*
+#case sensitivity
+.[Cc][Ll][Aa][Uu][Dd][Ee]*
+.[Cc][Oo][Pp][Ii][Ll][Oo][Tt]*
+.[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]*
