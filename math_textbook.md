@@ -21,6 +21,7 @@
     - [I.5c Cost: the FFT is not the bottleneck](#i5c-cost-the-fft-is-not-the-bottleneck)
   - [I.6 The Vector Pattern State — Definition B (neighbor-relative coherence)](#i6-the-vector-pattern-state--definition-b-neighbor-relative-coherence)
   - [I.6a The Vector Pattern State — Definition C (streaming surrogate), and what it is not](#i6a-the-vector-pattern-state--definition-c-streaming-surrogate-and-what-it-is-not)
+  - [I.6b The alternative-norm question: $L^1$ and cosine distance for the $\ell$ feature](#i6b-the-alternative-norm-question-l1-and-cosine-distance-for-the-ell-feature)
   - [I.7 From VPS to labels: model-order selection](#i7-from-vps-to-labels-model-order-selection)
     - [I.7a Consensus selection: elbow, BIC, silhouette, and the structure-vs-noise null guard](#i7a-consensus-selection-elbow-bic-silhouette-and-the-structure-vs-noise-null-guard)
     - [I.7b Emergent attractor counts: DBSCAN with an auto-selected radius](#i7b-emergent-attractor-counts-dbscan-with-an-auto-selected-radius)
@@ -36,6 +37,7 @@
   - [II.4 Final-state sensitivity and the uncertainty exponent](#ii4-final-state-sensitivity-and-the-uncertainty-exponent)
   - [II.4a Basin entropy and the Daza Wada-suspect criterion](#ii4a-basin-entropy-and-the-daza-wada-suspect-criterion)
   - [II.4b The grid (dilation) Wada-bounds test](#ii4b-the-grid-dilation-wada-bounds-test)
+  - [II.4c Control-theoretic perturbation sensitivity: the $P_{\text{flip}}(\delta)$ test](#ii4c-control-theoretic-perturbation-sensitivity-the-p_textflipdelta-test)
   - [II.5 Causation entropy: differential entropy and Gaussian closed forms](#ii5-causation-entropy-differential-entropy-and-gaussian-closed-forms)
   - [II.6 Conditional mutual information and the oCSE algorithm](#ii6-conditional-mutual-information-and-the-ocse-algorithm)
   - [II.7 The chi-squared significance test](#ii7-the-chi-squared-significance-test)
@@ -438,6 +440,27 @@ each block independently $z$-scored across the batch before concatenation (the t
 
 The surrogate is a legitimate coherence feature in its own right; it is simply a *different* one. Every basin-sweep result in this repository was computed from (I.18a), not from (I.15) — a memory constraint silently substituting one quantity for another is a failure mode worth stating explicitly, because nothing downstream announces it.
 
+## I.6b The alternative-norm question: $L^1$ and cosine distance for the $\ell$ feature
+
+Bollt et al. (2023) [26] fix their pairwise similarity as an $L^2$ (Euclidean) measure and say so explicitly, flagging alternative norms as unexplored future work — a gap their own Discussion names but does not close. Definition C's $\tilde\ell_{ij}$ of (I.18a) is exactly this: $\lVert\mathbf x_i-\mathbf x_j\rVert_2$, time-averaged. Two alternatives replace only this one norm, leaving $\tilde\tau_{ij}$ and the streaming/Welford machinery of §I.6a untouched:
+
+$$
+\tilde\ell^{(1)}_{ij} \;=\; \big\langle\, \lVert \mathbf x_i - \mathbf x_j\rVert_1 \,\big\rangle_t
+\;=\; \big\langle\, \lvert X_i-X_j\rvert+\lvert Y_i-Y_j\rvert+\lvert Z_i-Z_j\rvert \,\big\rangle_t,
+\tag{I.18b}
+$$
+
+$$
+\tilde\ell^{(\cos)}_{ij} \;=\; \Big\langle\, 1 - \frac{\mathbf x_i(t)\cdot\mathbf x_j(t)}{\lVert\mathbf x_i(t)\rVert\,\lVert\mathbf x_j(t)\rVert} \,\Big\rangle_t .
+\tag{I.18c}
+$$
+
+These are not interchangeable rescalings of the same quantity. $\tilde\ell^{(1)}$ measures separation magnitude like $\tilde\ell_{ij}$ but weights each coordinate axis linearly rather than quadratically, so it is comparatively less dominated by whichever axis happens to have the largest instantaneous spread — for the Lorenz system, typically $Y$ or $Z$ during a lobe excursion. $\tilde\ell^{(\cos)}$ is qualitatively different in kind: it discards magnitude entirely and measures only whether $\mathbf x_i(t)$ and $\mathbf x_j(t)$ point the *same direction* in phase space, so two nodes deep in the same lobe but at different radii from the fixed point score as coherent, whereas $\tilde\ell_{ij}$ and $\tilde\ell^{(1)}$ would report them as separated.
+
+**Implementation** (`pipeline/lorenz_sweep.py::run_sweep_streaming`, parameter `norm ∈ {"l2","l1","cosine"}`, threaded through `pipeline/lorenz_fine_coupling_sweep.py` as `--vps-norm`). The branch sits at the one line that forms $\tilde\ell_{ij}$ each step: `l2`/`l1` operate on the pairwise difference `x0[:,i,:] - x0[:,j,:]` exactly as (I.18a)/(I.18b) require, while `cosine` reads the raw state slices `x0[:,i,:]`, `x0[:,j,:]` directly, since (I.18c) needs the two vectors separately, not their difference. Default `norm="l2"` reproduces prior output bit-for-bit.
+
+**Preliminary finding.** A smoke-scale comparison (grid $24^2$, $K=0.5$, $t_{\max}=10$ — far below production length, reported only as a sanity check that the branch does something, not as a result) gave $D_f=1.669$ ($L^2$), $1.671$ ($L^1$), $1.486$ (cosine): the two magnitude-based norms agree closely, while the direction-based norm differs by a margin well outside plausible sampling noise at this scale. The clustering-free lobe-sign label (I.28) was, as it must be, identical across all three ($\gamma_{\text{sign}}=0.311$ in every run) — confirming the norm swap touches only the VPS/$k$-means path of §I.7, not the independent labeling of §I.8. A production-resolution rerun of all three norms on the same $K$, node pair, and grid is the actual experiment; this is only evidence the plumbing is correct and the effect is worth chasing.
+
 ## I.7 From VPS to labels: model-order selection
 
 A **population** of VPS vectors — one per initial condition across a basin sweep, stacked into a matrix $V\in\mathbb R^{M\times N}$ — is clustered into attractor-type labels by $k$-means, with the number of clusters $k$ chosen automatically. Two criteria appear.
@@ -788,6 +811,32 @@ $$
 \tag{II.10g}
 $$
 measures what proportion of the boundary is a genuine triple(-or-more)-junction rather than a simple two-basin edge; $\mathrm{frac}_{\text{Wada}}\approx1$ (with the strict fraction also near $1$) is the discrete analogue of declaring the whole boundary Wada. On the real coupling-sweep basin maps (5 coexisting basins, near-space-filling $D_f\approx1.999$), this test finds $\approx97\%$ Wada-boundary coverage but only $\approx2\%$ strict coverage — almost every boundary point borders three-or-more basins, but rarely all five at once — a finer-grained picture than the box-entropy sufficient condition (II.10d) alone provides, since (II.10e)–(II.10g) directly counts basin memberships rather than inferring them from an entropy bound.
+
+## II.4c Control-theoretic perturbation sensitivity: the $P_{\text{flip}}(\delta)$ test
+
+Riddled-basin theory makes a specific, falsifiable geometric claim, independent of any box-counting or entropy statistic: near a riddled point, *every* neighborhood — no matter how small — already contains points belonging to a different basin [19,20]. Bollt et al. (2023) [26] lean on exactly this property to argue that switching between coexisting network states requires only a "vanishingly small" perturbation, framing it as the dynamical mechanism behind rapid task-switching in the brain — but the paper stops at the geometric argument; no perturbation is actually injected and no switch is actually observed. This is the gap `pipeline/perturbation_sensitivity.py` closes.
+
+**Definition.** Fix a base initial condition $\mathbf x_0$ and its asymptotic label $\mathbf b(\mathbf x_0)$ from (I.28). For a perturbation magnitude $\delta$ and a random unit direction $\hat{\mathbf u}$ in the full $3N$-dimensional state space, define the **flip indicator**
+
+$$
+F(\mathbf x_0,\delta,\hat{\mathbf u}) \;=\; \mathbb 1\!\big[\, \mathbf b(\mathbf x_0+\delta\hat{\mathbf u}) \;\ne\; \mathbf b(\mathbf x_0) \,\big],
+\tag{II.10h}
+$$
+
+and the **flip probability** at scale $\delta$, averaged over $n_{\text{pts}}$ base points and $n_{\text{dir}}$ directions per point:
+
+$$
+\boxed{\;
+P_{\text{flip}}(\delta) \;=\; \Big\langle\, F(\mathbf x_0,\delta,\hat{\mathbf u}) \,\Big\rangle_{\mathbf x_0,\,\hat{\mathbf u}}
+\;}
+\tag{II.10i}
+$$
+
+**The riddling signature is a statement about the $\delta\to0$ limit of (II.10i).** For a point strictly interior to an ordinary (non-riddled) basin, a finite-radius neighborhood is entirely one basin, so $P_{\text{flip}}(\delta)\to0$ as $\delta\to0$ — some minimum kick is required to reach the boundary. For a riddled point, no such neighborhood exists at any radius, so $P_{\text{flip}}(\delta)$ stays bounded away from $0$ even as $\delta\to$ machine precision. The two regimes are distinguished by the *shape* of the curve, not a single number: a decaying $P_{\text{flip}}(\delta)$ is an ordinary boundary; a curve that flattens toward a nonzero floor as $\delta$ shrinks is the riddling claim, made operational.
+
+**Implementation.** Base points are drawn either uniformly on the initial-condition slice or, more informatively, from the clustering-free lobe-sign boundary/interior of §I.8 at a fixed reference coupling $K_{\text{ref}}$ (`--base-ic-mode boundary|interior`, located by `build_sign_slice`, which reuses (I.28) rather than the VPS/$k$-means path so the sampling itself carries no clustering artifact). For each $(\mathbf x_0,\delta,\hat{\mathbf u})$ triple, the perturbed and unperturbed states are integrated with the same batched `rk4_step_batched` used throughout Part I — the full $(n_{\text{pts}}\times n_{\text{dir}}\times n_\delta)$ grid is one flat batch, so this is embarrassingly parallel over exactly the same axis as a basin sweep. $\delta$ is swept geometrically, $\delta\in[10^{-8},10^{-1}]$, to resolve the small-$\delta$ asymptote against the finite-$\delta$ crossover.
+
+**Status.** As of this writing the production sweep ($K\in\{0,0.1,0.5\}$ — uncoupled control, onset region, measured riddled regime — full $t_{\text{transient}}=100$, $t_{\max}=500$ integration) is running; the $P_{\text{flip}}(\delta)$ curves are the first direct experimental test of the control-theoretic claim in [26], on this system or any other reported in the literature to date.
 
 ## II.5 Causation entropy: differential entropy and Gaussian closed forms
 
@@ -1324,6 +1373,7 @@ The empirical connectome's eigenratio ($\approx 23.7$) is $\sim7\times$ the ER n
 23. A.-L. Barabási, R. Albert. *Emergence of scaling in random networks.* Science **286** (1999) 509–512.
 24. M. Fiedler. *Algebraic connectivity of graphs.* Czechoslovak Mathematical Journal **23** (1973) 298–305.
 25. F. R. K. Chung. *Spectral Graph Theory.* CBMS Regional Conference Series in Mathematics **92**, American Mathematical Society, 1997.
+26. E. M. Bollt, J. Fish, A. Kumar, C. Roque dos Santos, P. J. Laurienti. *Fractal Basins as a Mechanism for the Nimble Brain.* arXiv:2311.00061 (2023) — the project's motivating paper: the Vector Pattern State (Definition A, §I.5), riddled/fractal chimera basins on the DTI connectome, and the $L^2$-by-fiat and control-theoretic gaps addressed in §I.6b and §II.4c.
 
 ---
 

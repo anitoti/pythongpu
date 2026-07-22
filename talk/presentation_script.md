@@ -291,8 +291,13 @@ swapped out the real computation. And I built **validated diagnostics** that tur
 the mechanism: coupling locks nodes onto lobes, giving a thousand-plus permanent,
 mingled basins.
 
-Next up: settle the lag question with Dr. Fish, beat the memory wall so the *real*
-VPS runs at full scale, and explore other viewing planes.
+Next up: settle the lag question with Dr. Fish, and null models plus CLV
+transversality, which are in progress. Running right now on the cluster: whether a
+tiny perturbation near a riddled point actually flips the lobe pattern — a direct
+test of the paper's own control-theoretic claim — whether the fractal dimension
+survives swapping the VPS's L2 distance for L1 or cosine, higher-resolution and
+additional viewing planes, and a distributed-vs-serial scaling benchmark quantifying
+what the GPU port actually buys.
 
 **The takeaway: a fast pipeline that can't fail isn't a measurement. The speedup was
 the easy part — checking that the fast thing still computed the *right* thing is where
@@ -327,6 +332,10 @@ Thank you — I'm happy to take questions.
   finding doesn't depend on the VPS at all — it uses sign of the long-time average, no
   correlation, no lag. So that result stands regardless. The VPS question matters for
   reproducing the paper's *specific* chimera diagnostic, which is future work.
+- **"Do you have the perturbation results yet?"** → Honest answer: running as of this
+  talk, not in hand. It's a direct test of the paper's claim that a vanishingly small
+  perturbation near a riddled point should flip the outcome — I'm not going to put a
+  number on the slide I haven't measured yet.
 
 ---
 
