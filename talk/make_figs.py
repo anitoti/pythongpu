@@ -269,6 +269,31 @@ def fig_network():
 
 
 # ── 8. Lorenz attractor with its two wings (textbook geometry) ───────────────
+def fig_adjacency():
+    # Replaces fig_network(): the node-link layout put the "hub"/"leaf" degree
+    # labels on top of the node cluster and under the colorbar respectively,
+    # illegible either way (spring_layout has no notion of leaving room for
+    # annotations). A matrix view has no node-overlap failure mode at all --
+    # every cell has a fixed, unambiguous position.
+    import scipy.io
+    A = scipy.io.loadmat("data/DTI-og.mat")["A"].astype(float)
+    A = np.maximum(A, A.T)
+    np.fill_diagonal(A, 0)
+    n = A.shape[0]
+    deg = (A > 0).sum(axis=1)
+    density = (A > 0).sum() / (n * (n - 1))
+
+    fig, ax = plt.subplots(figsize=(6.0, 5.6))
+    im = ax.imshow((A > 0).astype(float), cmap="YlOrBr", interpolation="nearest")
+    ax.set_title(f"The DTI connectome: {n} regions, {int((A>0).sum()/2)} edges\n"
+                f"density {density:.2f}, degree {int(deg.min())}–{int(deg.max())}",
+                fontsize=11)
+    ax.set_xlabel("region index")
+    ax.set_ylabel("region index")
+    fig.colorbar(im, ax=ax, fraction=0.045, pad=0.03, label="connected")
+    save(fig, "dti_adjacency.png")
+
+
 def fig_lorenz():
     sig, rho, beta, dt = 10.0, 28.0, 8.0/3.0, 0.004
     x = np.empty((60000, 3))
@@ -366,7 +391,7 @@ def fig_basin_map():
 if __name__ == "__main__":
     print("generating figures ->", FIGS)
     for f in (fig_benchmark, fig_alignment, fig_lobe_hist, fig_onset,
-              fig_convergence, fig_persistence, fig_network, fig_lorenz,
+              fig_convergence, fig_persistence, fig_adjacency, fig_lorenz,
               fig_cartoon, fig_basin_map):
         try:
             f()
