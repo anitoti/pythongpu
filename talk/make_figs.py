@@ -337,17 +337,26 @@ def fig_cartoon():
     a.set_title("Smooth boundary\na big push is needed to switch")
 
     rng = np.random.default_rng(1)
-    lab = np.zeros((g, g))
-    for k in range(1, 9):                       # nested interleaving -> fine scales
-        lab += ((X * 2**k).astype(int) % 2) * (0.5 ** k)
-    lab = (lab > lab.mean()).astype(float)
+    # Nested dyadic interleaving: XOR (parity of) 8 scales of the binary
+    # expansion of X. Summing the scales with weight 0.5**k (the earlier
+    # version) just reconstructs X to 8-bit precision and thresholds it --
+    # 99% identical to the smooth panel's plain X>0.5 split. XOR-ing them
+    # instead gives genuine self-similar interleaving at every scale, which
+    # is the actual point of this panel.
+    lab = np.zeros((g, g), dtype=int)
+    for k in range(1, 9):
+        lab ^= ((X * 2**k).astype(int) % 2)
+    lab = lab.astype(float)
     flip = rng.random((g, g)) < 0.06        # one mask, evaluated once
     lab[flip] = 1 - lab[flip]
     b.imshow(lab, cmap=matplotlib.colors.ListedColormap([OLIVE, OCHRE]),
              origin="lower", extent=[0, 1, 0, 1], interpolation="nearest")
+    # No directional arrow here, unlike the smooth panel: the whole point of
+    # "always a hair away" is that a nudge in ANY direction crosses a
+    # boundary immediately, not one specific push-direction. A marker alone
+    # against the fine interleaving already reads as "surrounded on all
+    # sides."
     b.plot(0.30, 0.5, "o", ms=13, color=CREAM, mec=DARK, mew=2)
-    b.annotate("", xy=(0.335, 0.5), xytext=(0.31, 0.5),
-               arrowprops=dict(arrowstyle="->", color=RUST, lw=2.4))
     b.set_title("Fractal boundary\nan edge is always a hair away")
     for ax in (a, b):
         ax.set_xticks([])
