@@ -14,6 +14,7 @@
   - [I.1 The general coupled-oscillator field](#i1-the-general-coupled-oscillator-field)
   - [I.2 Governing differential equations of the concrete systems](#i2-governing-differential-equations-of-the-concrete-systems)
   - [I.3 Coupling schemes: diffusive Laplacian vs. phase coupling](#i3-coupling-schemes-diffusive-laplacian-vs-phase-coupling)
+    - [I.3a Theorem (Master Stability Function, Pecora–Carroll)](#i3a-theorem-master-stability-function-pecoracarroll)
   - [I.4 State transitions: the RK4 flow map](#i4-state-transitions-the-rk4-flow-map)
   - [I.5 The Vector Pattern State — Definition A (lag–norm signature)](#i5-the-vector-pattern-state--definition-a-lagnorm-signature)
     - [I.5a The alignment convention — and a discrepancy with the reference implementation](#i5a-the-alignment-convention--and-a-discrepancy-with-the-reference-implementation)
@@ -55,9 +56,11 @@
 - [Part IV — Covariant Lyapunov Vectors, Riddling, and Spectral Graph Theory](#part-iv--covariant-lyapunov-vectors-riddling-and-spectral-graph-theory)
   - [IV.1 Entropic regression: the backward elimination pass](#iv1-entropic-regression-the-backward-elimination-pass)
   - [IV.2 Structural–functional fusion](#iv2-structuralfunctional-fusion)
+    - [IV.2a Theorem (Oseledets' Multiplicative Ergodic Theorem)](#iv2a-theorem-oseledets-multiplicative-ergodic-theorem)
   - [IV.3 Covariant Lyapunov vectors and the Ginelli algorithm](#iv3-covariant-lyapunov-vectors-and-the-ginelli-algorithm)
   - [IV.4 The Lyapunov spectrum from the R-diagonals](#iv4-the-lyapunov-spectrum-from-the-r-diagonals--dimension-counting-part-1)
   - [IV.5 The Kaplan–Yorke dimension](#iv5-the-kaplanyorke-dimension--dimension-counting-part-2)
+    - [IV.5a Theorem (Kan, 1994)](#iv5a-theorem-kan-1994)
   - [IV.6 Transversality angles and riddled basins](#iv6-transversality-angles-and-riddled-basins)
     - [IV.6a The transverse Lyapunov exponent and the riddling criterion](#iv6a-the-transverse-lyapunov-exponent-and-the-riddling-criterion)
     - [IV.6b The CLV-angle proxy and the k-means detector](#iv6b-the-clv-angle-proxy-and-the-k-means-detector)
@@ -248,6 +251,36 @@ r\,e^{\,i\psi} \;=\; \frac{1}{N}\sum_{j=1}^{N} e^{\,i\theta_j},
 $$
 
 measures coherence: $r\to 1$ is full synchrony, $r\to 0$ is incoherence. For the *all-to-all* graph $A_{ij}\equiv 1$, substituting (I.9) into (I.8) yields the mean-field form $\dot\theta_i=\omega_i + Kr\sin(\psi-\theta_i)$, from which the classical critical coupling $K_c = 2/(\pi g(0))$ (with $g$ the frequency density) follows. The repository uses (I.8)–(I.9) as one more source of VPS signatures for basin classification.
+
+### I.3a Theorem (Master Stability Function, Pecora–Carroll)
+
+The informal statement above — "$\Lambda(\sigma\lambda_m)<0$ for all $m\ge2$ $\Rightarrow$ stable synchrony" — is Pecora and Carroll's master-stability-function (MSF) result [4], stated here in full because it is the theoretical backbone this repository leans on every time it sweeps a coupling constant $K$ (or $\sigma$) and asks whether the network is synchronized, at threshold, or in a chimera regime.
+
+**Setup.** $N$ identical oscillators $\dot{\mathbf x}_i=\mathbf F(\mathbf x_i)$, diffusively coupled through a Laplacian $L=D-A$ and an inner coupling matrix $H$:
+$$
+\dot{\mathbf x}_i \;=\; \mathbf F(\mathbf x_i) \;-\; \sigma\sum_{j=1}^N L_{ij}\,H\mathbf x_j,
+\qquad i=1,\dots,N.
+\tag{I.9a}
+$$
+Because $L\mathbf 1=\mathbf 0$, the fully synchronous state $\mathbf x_1(t)=\dots=\mathbf x_N(t)=\mathbf s(t)$ (with $\dot{\mathbf s}=\mathbf F(\mathbf s)$) is always an exact solution, as already noted in §I.2. The question is whether it is *stable*.
+
+**Theorem (Pecora–Carroll, 1998).** *Diagonalize $L$ in its orthonormal eigenbasis, $Lv^{(m)}=\lambda_m v^{(m)}$, $0=\lambda_1\le\lambda_2\le\dots\le\lambda_N$. Writing a perturbation of $\mathbf s(t)$ in this eigenbasis, the variational equation for the synchronous solution decouples into $N$ independent blocks, one per mode:*
+$$
+\boxed{\;
+\dot{\boldsymbol\xi}_m \;=\; \big[\,D\mathbf F(\mathbf s(t)) \;-\; \sigma\lambda_m H\,\big]\,\boldsymbol\xi_m,
+\qquad m=1,\dots,N,
+\;}
+\tag{I.7}
+$$
+*which is exactly (I.7). Mode $m=1$ ($\lambda_1=0$) is the perturbation along the synchronization manifold itself and is excluded from the stability question. Define the* master stability function *$\Lambda(\alpha)$ as the largest Lyapunov exponent of the single generic block $\dot{\boldsymbol\xi}=[D\mathbf F(\mathbf s(t))-\alpha H]\boldsymbol\xi$, evaluated as a function of the scalar $\alpha$ alone — a property of $\mathbf F$, $H$, and $\mathbf s(t)$ only, computed once, independent of the specific network. Then the synchronous state is linearly stable if and only if*
+$$
+\Lambda(\sigma\lambda_m) \;<\; 0 \qquad\text{for every } m=2,\dots,N.
+\tag{I.9b}
+$$
+
+**Why this is a genuine theorem, not a heuristic.** The content is the *decoupling*: without it, stability of an $N$-node network would require diagonalizing an $N\cdot\dim(\mathbf x_i)$-dimensional linear system anew for every network and every $\sigma$. Pecora–Carroll show the network's only role is to supply the scalars $\{\sigma\lambda_m\}$ at which a single, network-independent function $\Lambda$ must be evaluated — collapsing an $N$-body stability problem to a 1-parameter scan. This is exactly what makes the eigenratio criterion of §IV.7 ((IV.13): $R=\lambda_N/\lambda_2$) possible: once $\Lambda$'s stability interval $(\alpha_1,\alpha_2)$ is known for the local dynamics, *every* network's synchronizability reduces to a single number, $R$.
+
+**Scope and its limits.** The theorem concerns the *linear* (local) stability of the synchronization manifold — it says nothing about riddled basins around it (§IV.5a–IV.6), about chimera states with only partial synchrony (the VPS's actual target, §I.5–I.6), or about global/nonlinear stability. It is the right tool for asking "does full synchrony survive a small perturbation at this $\sigma$," and the wrong tool for asking "what does the basin of a partially-synchronous state look like" — the latter is the entire subject of Part II.
 
 ## I.4 State transitions: the RK4 flow map
 
@@ -440,26 +473,28 @@ each block independently $z$-scored across the batch before concatenation (the t
 
 The surrogate is a legitimate coherence feature in its own right; it is simply a *different* one. Every basin-sweep result in this repository was computed from (I.18a), not from (I.15) — a memory constraint silently substituting one quantity for another is a failure mode worth stating explicitly, because nothing downstream announces it.
 
-## I.6b The alternative-norm question: $L^1$ and cosine distance for the $\ell$ feature
+## I.6b The alternative-norm question: a continuous $p$-norm family plus cosine distance for the $\ell$ feature
 
-Bollt et al. (2023) [26] fix their pairwise similarity as an $L^2$ (Euclidean) measure and say so explicitly, flagging alternative norms as unexplored future work — a gap their own Discussion names but does not close. Definition C's $\tilde\ell_{ij}$ of (I.18a) is exactly this: $\lVert\mathbf x_i-\mathbf x_j\rVert_2$, time-averaged. Two alternatives replace only this one norm, leaving $\tilde\tau_{ij}$ and the streaming/Welford machinery of §I.6a untouched:
+Bollt et al. (2023) [26] fix their pairwise similarity as an $L^2$ (Euclidean) measure and say so explicitly, flagging alternative norms as unexplored future work — a gap their own Discussion names but does not close. Definition C's $\tilde\ell_{ij}$ of (I.18a) is exactly this: $\lVert\mathbf x_i-\mathbf x_j\rVert_2$, time-averaged. Rather than swap in one or two fixed alternatives, $\tilde\ell_{ij}$ generalizes to the full $p$-norm family PyTorch already provides via `torch.linalg.norm(..., ord=p)`, plus one genuinely different measure that is not a member of that family:
 
 $$
-\tilde\ell^{(1)}_{ij} \;=\; \big\langle\, \lVert \mathbf x_i - \mathbf x_j\rVert_1 \,\big\rangle_t
-\;=\; \big\langle\, \lvert X_i-X_j\rvert+\lvert Y_i-Y_j\rvert+\lvert Z_i-Z_j\rvert \,\big\rangle_t,
+\tilde\ell^{(p)}_{ij} \;=\; \big\langle\, \lVert \mathbf x_i - \mathbf x_j\rVert_p \,\big\rangle_t,
+\qquad p\in\mathbb R\cup\{\pm\infty\},
 \tag{I.18b}
 $$
 
+recovering $\tilde\ell_{ij}$ of (I.18a) at $p=2$; $p=1$ is the linearly-weighted (Manhattan) case; $p=\infty$ and $p=-\infty$ are the coordinatewise max and min (Chebyshev) norms, sensitive only to the single most- or least-divergent axis of $\mathbf x_i-\mathbf x_j$ at each instant; and any other real $p$ gives a continuous sweep of norm sensitivity between these extremes, not just a handful of fixed cases. Separately,
+
 $$
-\tilde\ell^{(\cos)}_{ij} \;=\; \Big\langle\, 1 - \frac{\mathbf x_i(t)\cdot\mathbf x_j(t)}{\lVert\mathbf x_i(t)\rVert\,\lVert\mathbf x_j(t)\rVert} \,\Big\rangle_t .
+\tilde\ell^{(\cos)}_{ij} \;=\; \Big\langle\, 1 - \frac{\mathbf x_i(t)\cdot\mathbf x_j(t)}{\lVert\mathbf x_i(t)\rVert\,\lVert\mathbf x_j(t)\rVert} \,\Big\rangle_t
 \tag{I.18c}
 $$
 
-These are not interchangeable rescalings of the same quantity. $\tilde\ell^{(1)}$ measures separation magnitude like $\tilde\ell_{ij}$ but weights each coordinate axis linearly rather than quadratically, so it is comparatively less dominated by whichever axis happens to have the largest instantaneous spread — for the Lorenz system, typically $Y$ or $Z$ during a lobe excursion. $\tilde\ell^{(\cos)}$ is qualitatively different in kind: it discards magnitude entirely and measures only whether $\mathbf x_i(t)$ and $\mathbf x_j(t)$ point the *same direction* in phase space, so two nodes deep in the same lobe but at different radii from the fixed point score as coherent, whereas $\tilde\ell_{ij}$ and $\tilde\ell^{(1)}$ would report them as separated.
+discards magnitude entirely and measures only whether $\mathbf x_i(t)$ and $\mathbf x_j(t)$ point the *same direction* in phase space — two nodes deep in the same lobe but at different radii from the fixed point score as coherent, whereas every $\tilde\ell^{(p)}$ would report them as separated. It is not a member of the $p$-norm family in (I.18b) and cannot be reached by any choice of $p$, since it operates on the raw state vectors rather than their difference.
 
-**Implementation** (`pipeline/lorenz_sweep.py::run_sweep_streaming`, parameter `norm ∈ {"l2","l1","cosine"}`, threaded through `pipeline/lorenz_fine_coupling_sweep.py` as `--vps-norm`). The branch sits at the one line that forms $\tilde\ell_{ij}$ each step: `l2`/`l1` operate on the pairwise difference `x0[:,i,:] - x0[:,j,:]` exactly as (I.18a)/(I.18b) require, while `cosine` reads the raw state slices `x0[:,i,:]`, `x0[:,j,:]` directly, since (I.18c) needs the two vectors separately, not their difference. Default `norm="l2"` reproduces prior output bit-for-bit.
+**Implementation** (`pipeline/lorenz_sweep.py::run_sweep_streaming`, parameter `norm`, threaded through `pipeline/lorenz_fine_coupling_sweep.py` as `--vps-norm`). `norm="cosine"` computes (I.18c) directly from `x0[:,i,:]`, `x0[:,j,:]`; every other value — `"l2"`, `"l1"`, `"inf"`, `"-inf"`, or any float — resolves to an `ord` passed straight to `torch.linalg.norm(diff, ord=ord, dim=-1)` on the pairwise difference, i.e. (I.18b) for that $p$. Default `norm="l2"` reproduces prior output bit-for-bit. CLI note: a negative value must be passed as `--vps-norm=-inf` (equals form) — argparse otherwise reads the leading `-` as a new flag, not the value of the previous one.
 
-**Preliminary finding.** A smoke-scale comparison (grid $24^2$, $K=0.5$, $t_{\max}=10$ — far below production length, reported only as a sanity check that the branch does something, not as a result) gave $D_f=1.669$ ($L^2$), $1.671$ ($L^1$), $1.486$ (cosine): the two magnitude-based norms agree closely, while the direction-based norm differs by a margin well outside plausible sampling noise at this scale. The clustering-free lobe-sign label (I.28) was, as it must be, identical across all three ($\gamma_{\text{sign}}=0.311$ in every run) — confirming the norm swap touches only the VPS/$k$-means path of §I.7, not the independent labeling of §I.8. A production-resolution rerun of all three norms on the same $K$, node pair, and grid is the actual experiment; this is only evidence the plumbing is correct and the effect is worth chasing.
+**Preliminary finding.** A smoke-scale comparison (grid $24^2$, $K=0.5$, $t_{\max}=10$ — far below production length, reported only as a sanity check that the branch does something, not as a result) across the full family gave $D_f=1.669$ ($p=2$), $1.673$ ($p=1$), $1.671$ ($p=\infty$), $1.675$ ($p=-\infty$), $1.673$ ($p=0.5$), $1.671$ ($p=3$), and $1.685$ (cosine) — all seven within a band of $0.016$, i.e. indistinguishable at this scale. An earlier, isolated two-run comparison of just $L^2$ vs.\ cosine had suggested a much larger gap ($1.669$ vs.\ $1.486$); that gap did not reproduce once cosine was measured alongside the rest of the family under the same smoke-scale run, and is the more likely explanation of the two — a reminder that a single pairwise comparison at this integration length is not yet evidence, only the full family run side-by-side starts to be. The clustering-free lobe-sign label (I.28) was, as it must be, identical across every norm ($\gamma_{\text{sign}}=0.311$ throughout), confirming the swap touches only the VPS/$k$-means path of §I.7. The actual experiment — all values on the same $K$, node pair, and production-resolution grid — is still to run.
 
 ## I.7 From VPS to labels: model-order selection
 
@@ -1209,6 +1244,31 @@ $$
 
 The gate is a hard anatomical mask; the weighted form is a soft prior that attenuates (rather than deletes) functionally-inferred edges in proportion to their structural support. Direction is inherited entirely from the functional side; $S$ is symmetric.
 
+### IV.2a Theorem (Oseledets' Multiplicative Ergodic Theorem)
+
+Every Lyapunov exponent computed anywhere in this repository — the spectrum of §IV.4, the Kaplan–Yorke dimension of §IV.5, the transverse exponent of §IV.6, the CLVs of §IV.3 themselves — presupposes that such quantities exist at all: that the limits defining them converge, and converge to the *same* value along almost every trajectory rather than depending on which orbit or which initial tangent vector happened to be sampled. That guarantee is Oseledets' theorem, stated informally already at the top of §IV.3; here is the actual content being invoked.
+
+**Setup.** Let $\phi_t:\mathcal M\to\mathcal M$ be the flow of $\dot{\mathbf x}=\mathbf f(\mathbf x)$ on the attractor, $\mu$ an ergodic invariant measure for $\phi_t$ (e.g. the natural/SRB measure sampled by a long trajectory), and $M(t,\mathbf x)=D\phi_t(\mathbf x)$ the linear propagator of the variational equation (IV.4) along the orbit through $\mathbf x$ — a linear cocycle over $(\phi_t,\mu)$.
+
+**Theorem (Oseledets, 1968).** *If $\ln^+\lVert M(t,\mathbf x)\rVert$ is $\mu$-integrable (satisfied automatically for a bounded smooth flow on a compact attractor), then for $\mu$-almost every $\mathbf x$:*
+
+1. *the limit*
+$$
+\boxed{\;
+\Lambda(\mathbf x) \;=\; \lim_{t\to\infty}\big[M(t,\mathbf x)^{\!\top}M(t,\mathbf x)\big]^{1/2t}
+\;}
+\tag{IV.3a}
+$$
+*exists (the* Oseledets matrix*), with eigenvalues $e^{\lambda_1}>e^{\lambda_2}>\dots$ defining a fixed, finite list of Lyapunov exponents $\lambda_1\ge\lambda_2\ge\dots\ge\lambda_n$ — the same list for $\mu$-a.e. $\mathbf x$, by ergodicity;*
+2. *tangent space splits into a direct sum of subspaces, $\mathbb R^n=E_1(\mathbf x)\oplus\dots\oplus E_r(\mathbf x)$, that vary measurably with $\mathbf x$, are* covariant *under the flow ($D\phi_t(\mathbf x)E_i(\mathbf x)=E_i(\phi_t\mathbf x)$), and on which the growth rate of every nonzero $\mathbf v\in E_i(\mathbf x)$ is exactly $\lambda_i$:*
+$$
+\lim_{t\to\infty}\frac1t\ln\lVert M(t,\mathbf x)\mathbf v\rVert \;=\; \lambda_i
+\qquad\text{for all } \mathbf 0\ne\mathbf v\in E_i(\mathbf x).
+\tag{IV.3b}
+$$
+
+**Why the pipeline needs both parts, not just the exponents.** Part 1 is what makes "the Lyapunov spectrum of the Lorenz-DTI network" a well-posed, run-independent quantity rather than a number that would drift with the trajectory sampled — the empirical basis for (IV.7)'s time-average estimator and for treating $D_{\mathrm{KY}}$ (IV.8) as an attractor property. Part 2 is what makes the CLVs of §IV.3 meaningful *objects*, not merely a numerical convenience: the covariant splitting $E_i(\mathbf x)$ is exactly what $\mathbf v_i(t)$ in (IV.5) is constructed to span, and it is the covariance property — invariance under the linearized flow — that lets the transversality angles of §IV.6b be interpreted as genuine geometric alignment between dynamically meaningful directions, rather than an artifact of whichever orthonormal (Gram–Schmidt) basis the forward QR pass happened to produce.
+
 ## IV.3 Covariant Lyapunov vectors and the Ginelli algorithm
 
 To probe stability we linearize the flow $\dot{\mathbf x}=\mathbf f(\mathbf x)$ of Part I about a trajectory $\mathbf x(t)$. A tangent perturbation $\mathbf v$ obeys the **variational equation**
@@ -1269,6 +1329,19 @@ The Kaplan–Yorke conjecture identifies $D_{\mathrm{KY}}$ with the information 
 
 - **Fixed point / full contraction** ($\lambda_1<0$): the formula returns $D_{\mathrm{KY}}=0$.
 - **Ceiling** ($\sum_{i=1}^m\lambda_i\ge 0$ for *all* $m$ computed CLVs): the zero-crossing lies beyond the integrated subspace, so (IV.8) can only report $D_{\mathrm{KY}}\ge m$ — a lower bound, not the true dimension. `clv_cli`/`clv_topology` flag this as `kaplan_yorke_is_ceiling`. On the $N=83$ DTI–Lorenz network at coupling $0.1$, even $m=40$ CLVs hit the ceiling: the regime is *hyperchaotic* (dozens of positive exponents), and resolving $D_{\mathrm{KY}}$ needs of order the full $3N$ spectrum.
+
+### IV.5a Theorem (Kan, 1994)
+
+§IV.6a below states the *local, operational* criterion (IV.9) for recognizing a riddled basin once one is suspected: a negative average transverse exponent coexisting with transversely-repelling orbits embedded in the attractor. What that criterion does not answer is whether such a configuration is a fine-tuned coincidence — a measure-zero accident of one exact parameter value — or a robust feature that persists under perturbation. Kan's theorem answers this, and is the reason it is meaningful to speak of a "riddled *regime*" in $K$ (§II.4c, §III.9) rather than a single riddled point.
+
+**Setup.** Consider a system with an invariant submanifold $\mathcal M$ (here, the synchronization manifold of §I.3a) carrying a chaotic attractor $\mathbf A\subset\mathcal M$, embedded in a full phase space containing at least one other attractor $\mathbf A'\not\subset\mathcal M$. Let $\mu$ be the natural (SRB) measure on $\mathbf A$ and $\lambda_\perp=\int\lambda_\perp(\mathbf x)\,d\mu(\mathbf x)$ its $\mu$-average transverse Lyapunov exponent, so that $\lambda_\perp<0$ means $\mathbf A$ is attracting *on average* — the (IV.9) hypothesis.
+
+**Theorem (Kan, 1994) [27].** *Suppose $\mathbf A$ contains a periodic orbit $\mathbf p$ whose transverse Lyapunov exponent is positive (transversely repelling), while $\lambda_\perp<0$ for the natural measure on $\mathbf A$ as a whole, and $\mathbf A'$ lies within reach of orbits ejected near $\mathbf p$. Then:*
+
+1. *the basin of $\mathbf A$ is riddled by the basin of $\mathbf A'$ — every neighborhood of every point of $\mathbf A$'s basin contains a positive-measure set of points whose orbits instead converge to $\mathbf A'$;*
+2. *this configuration is not isolated: it persists on an* **open set** *of nearby dynamical systems (equivalently, an open range of the coupling parameter, here $K$), not merely at one exact value.*
+
+**Why part 2 is the theorem's real content.** Part 1 alone — riddling *can* occur under these hypotheses — already follows from the mechanism described in §IV.6a. What Kan adds is *genericity*: riddling of this kind is a structurally stable phenomenon, robust to small perturbations of the vector field or the coupling strength, precisely because it is certified by the *sign* of two quantities (the average transverse exponent and at least one embedded orbit's transverse exponent) rather than by any exact numerical coincidence. This is the theoretical license for treating $K\approx0.5$ not as a single measured riddled point but as sitting inside a genuine riddled *regime* — consistent with the onset-curve finding of §I.8a that locking, and with it the basin-boundary geometry, varies smoothly with $K$ rather than switching on at an isolated value, and with the flat-in-$K$ measurement of $D_f\approx1.89$–$1.96$ across $K\in[0.45,0.65]$ (§II.4) that first suggested riddling was the right explanation.
 
 ## IV.6 Transversality angles and riddled basins
 
@@ -1374,6 +1447,7 @@ The empirical connectome's eigenratio ($\approx 23.7$) is $\sim7\times$ the ER n
 24. M. Fiedler. *Algebraic connectivity of graphs.* Czechoslovak Mathematical Journal **23** (1973) 298–305.
 25. F. R. K. Chung. *Spectral Graph Theory.* CBMS Regional Conference Series in Mathematics **92**, American Mathematical Society, 1997.
 26. E. M. Bollt, J. Fish, A. Kumar, C. Roque dos Santos, P. J. Laurienti. *Fractal Basins as a Mechanism for the Nimble Brain.* arXiv:2311.00061 (2023) — the project's motivating paper: the Vector Pattern State (Definition A, §I.5), riddled/fractal chimera basins on the DTI connectome, and the $L^2$-by-fiat and control-theoretic gaps addressed in §I.6b and §II.4c.
+27. V. Kan. *Open sets of diffeomorphisms having two attractors, each with an everywhere dense basin.* Bull. Amer. Math. Soc. (N.S.) **31** (1994) 68–74 — the genericity/openness result underlying §IV.5a.
 
 ---
 

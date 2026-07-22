@@ -207,6 +207,7 @@ def run_sweep_streaming(
     p      : LorenzParams,
     device : torch.device,
     return_mean_x : bool = False,
+    norm   : str | float = "l2",
 ) -> torch.Tensor:
     """
     Integrate all B ICs simultaneously and accumulate VPS features
@@ -256,12 +257,36 @@ def run_sweep_streaming(
         lobe whose X-sign matches, so the exact attractor id is the 83-bit
         sign pattern — no k-means required.
 
+    norm : "cosine", "l1", "l2", "inf", "-inf", or a real number
+        Distance used for the L feature (the paper's "L² similarity measure
+        ... by fiat", flagged as unexplored future work). All non-"cosine"
+        values are the `ord` argument of `torch.linalg.norm` applied to the
+        pairwise (X,Y,Z) difference: "l2"/"l1" are shorthand for ord=2/1,
+        "inf"/"-inf" select the max/min-coordinate (Chebyshev) norm, and any
+        other real p gives torch.linalg.norm(diff, ord=p) -- a continuous
+        sweep of norm sensitivity, not just three fixed cases. "cosine" is
+        qualitatively different in kind, not a member of the ord family: it
+        measures whether two nodes' raw state vectors point the same
+        direction in phase space, independent of magnitude, so it reads
+        x0 directly rather than diff.
+
     Returns
     -------
     vps : (B, 2*C(N,2)) independently standardised VPS features on device
     mean_x : (B, N) per-node time-mean of X  — only when return_mean_x=True,
              in which case the return value is the tuple (vps, mean_x).
     """
+    _NAMED_ORDS = {"l2": 2.0, "l1": 1.0, "inf": float("inf"), "-inf": float("-inf")}
+    is_cosine = (norm == "cosine")
+    if not is_cosine:
+        if isinstance(norm, str):
+            if norm not in _NAMED_ORDS:
+                raise ValueError(
+                    f"norm must be 'cosine', {sorted(_NAMED_ORDS)}, or a real number, got {norm!r}")
+            ord_val = _NAMED_ORDS[norm]
+        else:
+            ord_val = float(norm)
+
     B, N, _ = x0.shape
     mean_x = torch.zeros(B, N, device=device) if return_mean_x else None
 
@@ -284,7 +309,16 @@ def run_sweep_streaming(
         diff = x0[:, i, :] - x0[:, j, :]
 
         dx_abs = diff[..., 0].abs()                       # (B, C)
-        L_val  = torch.linalg.norm(diff, dim=-1)          # (B, C)
+
+        # L feature: distance/coherence between node pairs i,j. Every ord_val
+        # measures separation magnitude of the raw difference; cosine instead
+        # measures directional (mis)alignment of the two nodes' full state
+        # vectors, so it reads from x0 directly rather than from diff.
+        if is_cosine:
+            L_val = 1.0 - torch.nn.functional.cosine_similarity(
+                x0[:, i, :], x0[:, j, :], dim=-1)                          # (B, C)
+        else:
+            L_val = torch.linalg.norm(diff, ord=ord_val, dim=-1)          # (B, C)
 
         # Welford update for |dX| — gives both mean and variance
         count  += 1

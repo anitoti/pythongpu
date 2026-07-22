@@ -87,7 +87,8 @@ def build_slice(p: LorenzParams, grid_n: int, grid_lo: float, grid_hi: float,
 # ── one coupling value ───────────────────────────────────────
 def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
                      grid_lo: float, grid_hi: float, k_clusters,
-                     cluster_criterion: str, device: torch.device) -> dict:
+                     cluster_criterion: str, device: torch.device,
+                     vps_norm: str | float = "l2") -> dict:
     """Integrate, cluster, and quantify the basin geometry for one K."""
     p = LorenzParams(
         sigma=p_base.sigma, rho=p_base.rho, beta=p_base.beta,
@@ -101,7 +102,7 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
     for _ in range(p.steps_transient):
         x0 = rk4_step_batched(x0, L_gpu, p)
     vectors_gpu, mean_x_gpu = run_sweep_streaming(
-        x0, L_gpu, p, device, return_mean_x=True)
+        x0, L_gpu, p, device, return_mean_x=True, norm=vps_norm)
     vectors = vectors_gpu.cpu().numpy()
 
     # ── clustering-free lobe-locking label field ──────────────────────
@@ -199,6 +200,21 @@ def _fine_ladder(k_start: float, k_stop: float, k_step: float) -> np.ndarray:
     return np.round(k_start + k_step * np.arange(n), 6)
 
 
+_VPS_NORM_NAMES = ("cosine", "l1", "l2", "inf", "-inf")
+
+
+def _parse_vps_norm(s: str):
+    """CLI parser for --vps-norm: a named string, or any real p (for
+    torch.linalg.norm(..., ord=p) in run_sweep_streaming)."""
+    if s in _VPS_NORM_NAMES:
+        return s
+    try:
+        return float(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--vps-norm must be one of {_VPS_NORM_NAMES} or a real number, got {s!r}")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -211,6 +227,16 @@ def main(argv=None) -> int:
     ap.add_argument("--grid-n", type=int, default=128)
     ap.add_argument("--grid-lo", type=float, default=-9.0)
     ap.add_argument("--grid-hi", type=float, default=9.0)
+    ap.add_argument("--vps-norm", default="l2", type=_parse_vps_norm,
+                    help="distance for the VPS 'L' feature (the paper's L2 measure, "
+                         "'chosen by fiat', flagged as unexplored). One of "
+                         "'cosine'/'l1'/'l2'/'inf'/'-inf', or any real p for "
+                         "torch.linalg.norm(..., ord=p) -- a continuous norm-sensitivity "
+                         "sweep, not just three fixed cases. Default 'l2' reproduces "
+                         "prior behaviour. NOTE: negative values (e.g. -inf, or a "
+                         "negative p) must be passed as --vps-norm=-inf, not "
+                         "--vps-norm -inf -- argparse otherwise reads the leading '-' "
+                         "as the start of another flag.")
     ap.add_argument("--k-clusters", default="auto",
                     help="'auto' (dynamic Elbow+BIC+Silhouette) or an integer.")
     ap.add_argument("--cluster-criterion", default="consensus",
@@ -253,12 +279,14 @@ def main(argv=None) -> int:
     for K in ladder:
         rec = observe_coupling(
             L_gpu, float(K), p_base, grid_n, args.grid_lo, args.grid_hi,
-            args.k_clusters, args.cluster_criterion, device)
+            args.k_clusters, args.cluster_criterion, device,
+            vps_norm=args.vps_norm)
         cfg = dict(coupling=rec["coupling"], slice_node_x=args.node_x,
                    slice_node_y=args.node_y, n_osc=n_dti, grid_n=grid_n,
                    k_clusters=rec["k_used"], grid_lo=args.grid_lo,
                    grid_hi=args.grid_hi, sigma=p_base.sigma, rho=p_base.rho,
-                   beta=p_base.beta, dt=p_base.dt, tmax=p_base.tmax)
+                   beta=p_base.beta, dt=p_base.dt, tmax=p_base.tmax,
+                   vps_norm=args.vps_norm)
         npz_path = out_dir / npz_name(args.node_x, args.node_y, float(K))
         np.savez_compressed(
             npz_path, Xg=rec["Xg"], Yg=rec["Yg"], labels=rec["labels"],
