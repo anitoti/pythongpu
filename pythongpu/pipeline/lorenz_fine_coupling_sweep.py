@@ -69,15 +69,18 @@ def build_slice(p: LorenzParams, grid_n: int, grid_lo: float, grid_hi: float,
     """
     Build the (B, N, 3) IC batch for a 2-D affine slice: the X component of
     ``p.slice_node_x`` sweeps the grid x-axis and ``p.slice_node_y`` the y-axis;
-    every other state entry sits near the (1,1,1) base point with a small jitter.
+    every other state entry sits at the (1,1,1) base point so each batch element
+    maps to exactly one grid cell.
     """
     ax = np.linspace(grid_lo, grid_hi, grid_n, dtype=np.float32)
     Xg, Yg = np.meshgrid(ax, ax)
     B, N = grid_n * grid_n, p.n_osc
-    x0 = torch.ones((B, N, 3), dtype=torch.float32, device=device)
-    x0 += 0.05 * torch.randn_like(x0)
-    x0[:, p.slice_node_x, 0] = torch.tensor(Xg.ravel(), device=device)
-    x0[:, p.slice_node_y, 0] = torch.tensor(Yg.ravel(), device=device)
+    x0 = torch.full((B, N, 3), 1.0, dtype=torch.float32, device=device)
+
+    # Flatten the 2-D mesh in row-major order so batch index b corresponds to
+    # exactly one (x, y) point on the IC grid.
+    x0[:, p.slice_node_x, 0] = torch.as_tensor(Xg.ravel(), device=device)
+    x0[:, p.slice_node_y, 0] = torch.as_tensor(Yg.ravel(), device=device)
     return x0, Xg, Yg
 
 
@@ -97,8 +100,32 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
 
     for _ in range(p.steps_transient):
         x0 = rk4_step_batched(x0, L_gpu, p)
-    vectors_gpu = run_sweep_streaming(x0, L_gpu, p, device)
+    vectors_gpu, mean_x_gpu = run_sweep_streaming(
+        x0, L_gpu, p, device, return_mean_x=True)
     vectors = vectors_gpu.cpu().numpy()
+
+    # ── clustering-free lobe-locking label field ──────────────────────
+    # Each node locks to the lobe whose X-sign matches its time-mean X; the
+    # exact attractor id is the full per-node sign pattern (lobe-locking is
+    # the mechanism). Collapse the (B, N) sign matrix to a dense integer id
+    # per IC and reshape onto the slice, then take the uncertainty exponent
+    # of THIS field — no k-means, so it is immune to the k-cluster D_f
+    # saturation artifact.
+    mean_x = mean_x_gpu.cpu().numpy()                       # (B, N)
+    signs = (mean_x > 0.0)                                  # (B, N) bool
+    # The basin map on THIS slice is the lobe signs of the two perturbed
+    # nodes: the grid axes are node_x's and node_y's X-ICs, so their final
+    # lobes are exactly what the slice partitions. The other 81 nodes carry
+    # per-IC jitter that flips their lobe independent of grid position, so
+    # including them buries the label under ~2^81 noise configs (that was the
+    # earlier all-None gamma_sign). Two swept nodes -> a clean 2-bit, ≤4-basin
+    # field. (full-network config count kept only as a diagnostic.)
+    nx, ny = p.slice_node_x, p.slice_node_y
+    sign_ids = signs[:, nx].astype(np.int32) * 2 + signs[:, ny].astype(np.int32)
+    sign_labels = sign_ids.reshape(grid_n, grid_n).astype(np.int32)
+    ue_sign = uncertainty_exponent(sign_labels, d=2)
+    n_pair_basins = int(np.unique(sign_ids).size)
+    n_full_cfg = int(np.unique(signs, axis=0).shape[0])
 
     if str(k_clusters).lower() == "auto":
         sel = select_optimal_clusters(vectors, k_min=2, k_max=12,
@@ -121,6 +148,10 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
         coupling=float(coupling), Xg=Xg, Yg=Yg, labels=labels, boundary=boundary,
         boxcount_r=r, boxcount_n=n, fractal_dim=float(D_f), r_squared=float(r_sq),
         gamma=ue.gamma, gamma_r2=ue.r_squared, D_f_gamma=ue.D_f,
+        sign_labels=sign_labels, n_lobe_configs=n_pair_basins,
+        n_full_cfg=n_full_cfg, mean_x=mean_x,
+        gamma_sign=ue_sign.gamma, gamma_sign_r2=ue_sign.r_squared,
+        D_f_gamma_sign=ue_sign.D_f,
         k_used=int(k_used), grid_lo=grid_lo, grid_hi=grid_hi,
     )
 
@@ -235,10 +266,20 @@ def main(argv=None) -> int:
             boxcount_n=rec["boxcount_n"], fractal_dim=np.array([rec["fractal_dim"]]),
             r_squared=np.array([rec["r_squared"]]),
             gamma=np.array([np.nan if rec["gamma"] is None else rec["gamma"]]),
+            sign_labels=rec["sign_labels"],
+            n_lobe_configs=np.array([rec["n_lobe_configs"]]),
+            n_full_cfg=np.array([rec["n_full_cfg"]]),
+            mean_x=rec["mean_x"],
+            gamma_sign=np.array(
+                [np.nan if rec["gamma_sign"] is None else rec["gamma_sign"]]),
+            D_f_gamma_sign=np.array(
+                [np.nan if rec["D_f_gamma_sign"] is None else rec["D_f_gamma_sign"]]),
             config=np.array(cfg, dtype=object))
         g = f"{rec['gamma']:.3f}" if rec["gamma"] is not None else "  -  "
+        gs = f"{rec['gamma_sign']:.3f}" if rec["gamma_sign"] is not None else "  -  "
         print(f"  [K={K:.4f}]  K_basins={rec['k_used']}  D_f={rec['fractal_dim']:.3f}  "
-              f"gamma={g}  ->  {npz_path.name}")
+              f"gamma={g}  |  lobe_configs={rec['n_lobe_configs']}  "
+              f"gamma_sign={gs}  ->  {npz_path.name}")
         frames.append(render_frame(rec, args.node_x, args.node_y, lbl_x, lbl_y,
                                    fig, canvas))
     plt.close(fig)

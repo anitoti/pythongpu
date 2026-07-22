@@ -206,6 +206,7 @@ def run_sweep_streaming(
     L_gpu  : torch.Tensor,
     p      : LorenzParams,
     device : torch.device,
+    return_mean_x : bool = False,
 ) -> torch.Tensor:
     """
     Integrate all B ICs simultaneously and accumulate VPS features
@@ -247,11 +248,22 @@ def run_sweep_streaming(
     p      : LorenzParams
     device : torch.device
 
+    return_mean_x : bool
+        If True, also accumulate the per-node running mean of X over the
+        recording window and return it as a second tensor. sign(mean_x) is
+        the clustering-free lobe-locking basin label (see the
+        lobe-locking-is-the-mechanism memo): each node locks to the Lorenz
+        lobe whose X-sign matches, so the exact attractor id is the 83-bit
+        sign pattern — no k-means required.
+
     Returns
     -------
     vps : (B, 2*C(N,2)) independently standardised VPS features on device
+    mean_x : (B, N) per-node time-mean of X  — only when return_mean_x=True,
+             in which case the return value is the tuple (vps, mean_x).
     """
     B, N, _ = x0.shape
+    mean_x = torch.zeros(B, N, device=device) if return_mean_x else None
 
     # All unique pairs (i < j), upper triangle, no diagonal
     # C(N,2) = N*(N-1)/2  pairs total
@@ -282,6 +294,10 @@ def run_sweep_streaming(
 
         # Simple Welford mean for L (variance not needed for L feature)
         mean_L = mean_L + (L_val - mean_L) / count
+
+        # Optional: running mean of per-node X for the sign-based lobe label
+        if mean_x is not None:
+            mean_x = mean_x + (x0[:, :, 0] - mean_x) / count
 
     # ── tau_x: normalised phase-coherence proxy ───────────────────────
     # std|dX| = sqrt(M2 / (count-1)); 1e-8 guards against zero variance
@@ -315,7 +331,10 @@ def run_sweep_streaming(
 
     # Concatenate standardised blocks → (B, 2*C)
     # Both halves now contribute equally to k-means distances.
-    return torch.cat([tau_x_std, mean_L_std], dim=-1)
+    vps = torch.cat([tau_x_std, mean_L_std], dim=-1)
+    if mean_x is not None:
+        return vps, mean_x
+    return vps
 
 
 # ═══════════════════════════════════════════════════════════════════════════
