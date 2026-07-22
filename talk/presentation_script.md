@@ -2,7 +2,7 @@
 
 **Anna Totilca · Clarkson HPC REU 2026 · Advisor: Dr. Jeremie Fish**
 Deck: `talk/summer_talk.tex` (16 slides). Target: **≤ 15 min.** This script is
-budgeted at **~13.5 min** to leave room for pauses, laughs, and questions.
+budgeted at **~13.75 min** to leave room for pauses, laughs, and questions.
 
 **How to use this:** the *italic cues* are delivery notes (don't say them). The plain
 text is roughly what to say — say it in your own words, don't memorize verbatim. The
@@ -33,8 +33,8 @@ clock is behind, cut to the **bold** sentence and move on.
 | 12 | Where Locking Switches On | 0:55 | 10:55 |
 | 13 | The Result | 1:00 | 11:55 |
 | 14 | What I Got Wrong | 0:50 | 12:45 |
-| 15 | Summary & Next | 0:45 | 13:30 |
-| 16 | Thank you | 0:05 | 13:35 |
+| 15 | Summary & Next | 0:55 | 13:40 |
+| 16 | Thank you | 0:05 | 13:45 |
 
 ---
 
@@ -287,17 +287,18 @@ and that's the *only* reason the real mechanism ever surfaced.
 So, in one breath: I **built the fast plane-scanner** — 130,000 simulations at once,
 375 times over serial. I **tested my own port** and found it doesn't match the source
 — possibly a bug in the *published* code. I found a **memory wall** that had silently
-swapped out the real computation. And I built **validated diagnostics** that turned up
+swapped out the real computation. I built **validated diagnostics** that turned up
 the mechanism: coupling locks nodes onto lobes, giving a thousand-plus permanent,
-mingled basins.
+mingled basins. And I **quantified the distributed-computing claim** instead of just
+asserting it — serial versus array-job wall-clock at matched resolution, 1.34 to
+3.38 times faster, growing with grid size.
 
 Next up: settle the lag question with Dr. Fish, and null models plus CLV
 transversality, which are in progress. Running right now on the cluster: whether a
 tiny perturbation near a riddled point actually flips the lobe pattern — a direct
 test of the paper's own control-theoretic claim — whether the fractal dimension
-survives swapping the VPS's L2 distance for L1 or cosine, higher-resolution and
-additional viewing planes, and a distributed-vs-serial scaling benchmark quantifying
-what the GPU port actually buys.
+survives swapping the VPS's L2 distance for L1 or cosine, and higher-resolution and
+additional viewing planes.
 
 **The takeaway: a fast pipeline that can't fail isn't a measurement. The speedup was
 the easy part — checking that the fast thing still computed the *right* thing is where
