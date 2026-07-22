@@ -23,11 +23,21 @@ set -euo pipefail
 COUPLINGS=(0.0 0.1 0.5)
 K="${COUPLINGS[${SLURM_ARRAY_TASK_ID}]}"
 
-# NOTE: this pipeline is torch-based; ACRES has no system torch/CuPy (CPU-only
-# array jobs). Point this at a venv/conda env that provides a CPU torch build
-# before relying on the cluster.
-# module load python/3.11  # adjust to the Lmod name available on ACRES
-# source ~/venvs/pythongpu/bin/activate
+# ACRES's bare `python3` is 3.6 -- too old for `from __future__ import
+# annotations` used throughout this pipeline (job 4556068 died in <1s on
+# exactly that SyntaxError on every array task). Same recipe as
+# run_clv_sweep.sh, which is the one known to work on this cluster.
+module load Python/3.10.4-GCCcore-11.3.0 || true
+module load libjpeg-turbo || true
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  echo "Using active virtualenv"
+elif [ -f venv/bin/activate ]; then
+  echo "Activating venv/bin/activate"
+  # shellcheck source=/dev/null
+  source venv/bin/activate
+fi
+python3 --version
+python3 -c "import torch; print('torch', torch.__version__)"
 
 OUTDIR="data/derivatives/perturbation_K${K}"
 mkdir -p "$OUTDIR"
