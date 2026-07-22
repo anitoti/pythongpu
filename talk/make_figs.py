@@ -135,7 +135,7 @@ def fig_lobe_hist():
     a.bar(ctr, k00, width=wid, color=OLIVE, edgecolor=DARK, lw=0.5)
     a.set(title="$K=0$  uncoupled: every node ergodic",
           xlabel=r"per-node  $\langle X_i\rangle$", ylabel="% of nodes")
-    a.text(0, 60, "100% within\n$|\\langle X\\rangle|<1$", ha="center",
+    a.text(6, 60, "100% within\n$|\\langle X\\rangle|<1$", ha="center",
            fontsize=10, color=OLIVE, fontweight="bold")
 
     b.bar(ctr, k05, width=wid, color=RUST, edgecolor=DARK, lw=0.5)

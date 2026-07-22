@@ -115,19 +115,19 @@
   \end{columns}%
 }
 
-\newcommand{\fig}[2]{%
-  \IfFileExists{figs/#1}{%
-    \includegraphics[width=\linewidth, height=0.58\textheight, keepaspectratio]{figs/#1}%
-    \par{\tiny #2}%
+\newcommand{\fig}[3][0.58]{%
+  \IfFileExists{figs/#2}{%
+    \includegraphics[width=\linewidth, height=#1\textheight, keepaspectratio]{figs/#2}%
+    \par{\tiny #3}%
   }{%
     \begin{tikzpicture}
       \draw[dashed, Rust, line width=1pt, fill=SandLight]
-        (0,0) rectangle (\linewidth,0.48\textheight);
+        (0,0) rectangle (\linewidth,#1\textheight);
       \node[align=center, text=Rust, font=\footnotesize\bfseries]
-        at (0.5\linewidth,0.28\textheight)
-        {[ FIGURE ]\\[3pt]{\ttfamily\detokenize{figs/#1}}};
+        at (0.5\linewidth,0.6*#1\textheight)
+        {[ FIGURE ]\\[3pt]{\ttfamily\detokenize{figs/#2}}};
       \node[align=center, text=DarkBrown, font=\tiny]
-        at (0.5\linewidth,0.08\textheight) {#2};
+        at (0.5\linewidth,0.15*#1\textheight) {#3};
     \end{tikzpicture}%
   }%
 }
@@ -207,7 +207,7 @@ my whole project is its code. Draw the ridgeline in the air. ~1.5 min.}
       from a plane.''
     \column{0.42\textwidth}
       \centering
-      \fig{dti_adjacency.png}{83 regions, 850 edges, density 0.25, diameter 4.}
+      \fig[0.42]{dti_adjacency.png}{83 regions, 850 edges, density 0.25, diameter 4.}
       \begin{block}{Why the Laplacian}
         \footnotesize
         $L\mathbf{1}=\mathbf{0}$, so full synchrony is \emph{always} an exact
@@ -241,7 +241,7 @@ anything else survive?'' is THE question. ~1.5 min.}
       number of attractors. We are \textbf{estimating an integer already out
       there}, not choosing it.}
     \column{0.44\textwidth}
-      \begin{block}{\alert{Hold onto this --- it detonates on slide 9}}
+      \begin{block}{Hold onto this --- it detonates on slide 9}
         $D\to2$ has \textbf{two} explanations:
         \smallskip
         \begin{enumerate}
@@ -334,7 +334,7 @@ xa,xb = x[ti,a_idx], x[tj,b_idx]
 L = norm((xa-xb)*valid, dim=0)
         \end{lstlisting}
       \end{block}
-      \begin{block}{\alert{Result: $3\times \rightarrow 375\times$}}
+      \begin{block}{Result: $3\times \rightarrow 375\times$}
         \footnotesize
         $\sim$57$\times$ over my own first port. The looped version was
         \textbf{slower than serial} at $T{=}128$ ($0.83\times$). Verified against
@@ -361,7 +361,7 @@ was never the problem. The loop after it was.'' ~2 min.}
   \begin{columns}[T]
     \column{0.46\textwidth}
       \centering
-      \fig{alignment_bias.png}{Every pair lies above the diagonal.}
+      \fig[0.40]{alignment_bias.png}{Every pair lies above the diagonal.}
       {\scriptsize $\tau$ matches on some inputs, differs on others (tie-breaking);
       $L$ disagrees on \emph{every} input.}
     \column{0.50\textwidth}
@@ -407,9 +407,9 @@ and the discrepancy may be a bug in the published code. Do NOT editorialise beyo
         (Welford, single-pass) that never stores a trajectory.
       \end{block}
     \column{0.46\textwidth}
-      \begin{block}{\alert{But the substitute isn't the VPS}}
+      \begin{block}{But the substitute isn't the VPS}
         \footnotesize
-        \begin{tabular}{ll}
+        \begin{tabular}{@{}p{0.32\linewidth}p{0.55\linewidth}@{}}
           \toprule
           paper / port & streaming \\
           \midrule
@@ -417,7 +417,7 @@ and the discrepancy may be a bug in the published code. Do NOT editorialise beyo
           $L$ after alignment & $L$ = instantaneous mean \\
           \bottomrule
         \end{tabular}
-        \smallskip
+        \par\smallskip
         \textbf{No lag anywhere.} And the lag is what detects phase-lagged
         synchrony --- the chimera signature the VPS exists to find.
       \end{block}
@@ -448,7 +448,7 @@ defines. Nobody noticed for weeks — including me. ~1.5 min.}
         automatic basin count said \textbf{6--8}; silhouette said \textbf{2}. And
         the map was pure static.
       \end{block}
-      \begin{block}{\alert{Slide 4, returning}}
+      \begin{block}{Slide 4, returning}
         \footnotesize
         We measured $D\to2$: interwoven boundary \emph{or} meaningless labelling.
         \textbf{$k$-means always returns $k$ groups} --- hand it noise, it returns
@@ -515,7 +515,7 @@ measure. Every conclusion I got without doing this was wrong. ~1.5 min.}
       \fig{lobe_histogram.png}{Uncoupled: ergodic, $\langle X\rangle\to0$.
       Coupled: 97.8\% pinned to one wing at $\pm7$.}
     \column{0.46\textwidth}
-      \begin{block}{\alert{So the basin label is exact}}
+      \begin{block}{So the basin label is exact}
         \footnotesize
         The network's attractor is a \textbf{pattern of $\pm$ lobes across 83 nodes}:
         \[ \boxed{\ \text{label} = \mathrm{sign}\langle X_i\rangle\ } \]
@@ -548,7 +548,7 @@ clustering problem in this talk. ~1.5 min.}
         anyone had swept. $\Lambda$ climbs from $0.026$ (ergodic) to $7.29$,
         against a single-wing value of $7.8$.
       \end{block}
-      \begin{block}{\alert{And it tells you which plane to render}}
+      \begin{block}{And it tells you which plane to render}
         \footnotesize
         The largest basin holds $0.1\%$ of ICs below onset, peaks at \textbf{9.3\%
         near $K\approx0.12$}, and falls to $0.4\%$ by $K=0.2$.
@@ -585,7 +585,7 @@ to map basins. ~1.5 min.}
         exactly the distance between \emph{random} strings.}
       \end{block}
       \centering
-      \fig{persistence.png}{The label is only as good as the locking: 50.2\%
+      \fig[0.32]{persistence.png}{The label is only as good as the locking: 50.2\%
       coin flip at $K{=}0.01$ (control), 99.9\% at $K{=}0.5$.}
     \column{0.46\textwidth}
       \begin{block}{So $D_f\approx1.96$ was right}
