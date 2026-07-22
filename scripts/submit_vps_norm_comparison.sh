@@ -10,7 +10,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=8G
+#SBATCH --mem=16G
 #SBATCH --array=0-6
 #SBATCH --output=logs/vps_norm_cmp_%A_%a.out
 #
@@ -26,9 +26,15 @@
 # clustering/box-counting adds some overhead on top, hence the 2h margin
 # instead of just the ~11 min the integration itself took.
 #
-# MEMORY: bytes = GRID_N^2 * 2*C(83,2) * 4 = 256^2 * 6806 * 4 =~ 1.8GB
-# (see submit_highres_slices.sh for the formula at higher GRID_N). --mem=8G
-# leaves comfortable headroom for k-means/box-counting temporaries.
+# MEMORY: all 7 array tasks OOM'd at the previous --mem=8G. That estimate
+# (GRID_N^2 * 2*C(83,2) * 4 =~ 1.8GB) only counted the final (B,C) feature
+# array -- run_sweep_streaming's inner loop actually holds ~9 arrays of that
+# size alive simultaneously (diff is (B,C,3) = 3 units; dx_abs/L_val/delta
+# are 1 unit each per step; mean_dx/M2_dx/mean_L are 3 more, persistent).
+# Real peak at GRID_N=256: 9 * 256^2 * 6806 * 4 =~ 8.0GB -- exactly why an
+# 8G request had zero headroom and guaranteed the OOM. --mem=16G leaves
+# real margin for k-means/box-counting temporaries and allocator overhead.
+# (see submit_highres_slices.sh for the same formula at higher GRID_N).
 #
 # --k-clusters 2 (fixed k, not 'auto') routes through kmeans_gpu, which is
 # now seeded (--kmeans-seed, default 42) -- required for this comparison to

@@ -10,7 +10,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
+#SBATCH --mem=96G
 #SBATCH --array=0-3
 #SBATCH --output=logs/highres_slices_%A_%a.out
 #
@@ -18,13 +18,22 @@
 # 750x750: one array task per (node_x, node_y) slice, all at the same fixed
 # K=0.5 (the measured riddled regime) and the same GRID_N resolution.
 #
-# MEMORY: run_sweep_streaming streams over time (integration length is free)
-# but still holds one (B, 2*C(83,2)) = (B, 6806) float32 VPS array in memory
-# for the whole batch. B = GRID_N^2, so bytes = GRID_N^2 * 6806 * 4. At the
-# paper's own 750x750 that's already ~15GB; GRID_N=900 (below) is ~22GB.
-# --mem=48G leaves real headroom for k-means/box-counting temporaries on top.
-# If you push GRID_N higher, recompute this and raise --mem to match --
-# there is no other guard against an OOM kill at higher resolution.
+# MEMORY: task 3 of the GRID_N=900/--mem=48G run OOM'd (0:125), and the other
+# 3 tasks were very likely doomed the same way, just slower to hit it. The
+# --mem=48G estimate only counted one (B, 2*C(83,2)) = (B, 6806) float32
+# array -- run_sweep_streaming's inner loop actually holds ~9 arrays of that
+# per-pair size alive simultaneously (diff is (B,C,3) = 3 units; dx_abs/
+# L_val/delta are 1 unit each per step; mean_dx/M2_dx/mean_L are 3 more,
+# persistent), i.e. real peak =~ 9 * GRID_N^2 * 3403 * 4 bytes, not 1x.
+#
+# ACRES `general` nodes have 116GB total (`sinfo -o "%n %m %e" -p general`,
+# 2026-07-22) -- GRID_N=900's real peak (~99GB) left only ~17GB margin
+# against a formula that had already been wrong once. Dropped to GRID_N=800
+# (~78GB peak, ~38GB margin) -- still legitimately above the paper's
+# 750x750, with real headroom against estimation error this time.
+# --mem=96G gives ~18GB of buffer above the ~78GB estimate itself.
+# If you push GRID_N higher, recompute against the 9x formula (not the old
+# 1x one) and check it against the node ceiling before trusting it.
 
 set -euo pipefail
 
@@ -52,7 +61,7 @@ NODE_PAIRS=(
 read -r NODE_X NODE_Y <<< "${NODE_PAIRS[${SLURM_ARRAY_TASK_ID}]}"
 
 K=${K:-0.5}
-GRID_N=${GRID_N:-900}
+GRID_N=${GRID_N:-800}
 
 OUTDIR="data/derivatives/highres_n${NODE_X}_n${NODE_Y}"
 mkdir -p "$OUTDIR"
