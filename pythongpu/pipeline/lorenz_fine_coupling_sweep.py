@@ -88,7 +88,7 @@ def build_slice(p: LorenzParams, grid_n: int, grid_lo: float, grid_hi: float,
 def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
                      grid_lo: float, grid_hi: float, k_clusters,
                      cluster_criterion: str, device: torch.device,
-                     vps_norm: str | float = "l2") -> dict:
+                     vps_norm: str | float = "l2", kmeans_seed: int = 42) -> dict:
     """Integrate, cluster, and quantify the basin geometry for one K."""
     p = LorenzParams(
         sigma=p_base.sigma, rho=p_base.rho, beta=p_base.beta,
@@ -136,7 +136,7 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
     else:
         from pythongpu.pipeline.lorenz_sweep import kmeans_gpu
         k_used = int(k_clusters)
-        labels = kmeans_gpu(vectors_gpu, k=k_used).cpu().numpy().reshape(grid_n, grid_n)
+        labels = kmeans_gpu(vectors_gpu, k=k_used, seed=kmeans_seed).cpu().numpy().reshape(grid_n, grid_n)
 
     boundary = extract_boundary(labels)
     r, n = boxcount_2d_gpu(boundary, device)
@@ -237,6 +237,13 @@ def main(argv=None) -> int:
                          "negative p) must be passed as --vps-norm=-inf, not "
                          "--vps-norm -inf -- argparse otherwise reads the leading '-' "
                          "as the start of another flag.")
+    ap.add_argument("--kmeans-seed", type=int, default=42,
+                    help="Forgy-init seed for the fixed-k GPU k-means path (used when "
+                         "--k-clusters is an integer, not 'auto'). Previously unseeded, "
+                         "so every run landed in a different local optimum -- confounded "
+                         "any comparison (e.g. across --vps-norm) that held everything "
+                         "else fixed. Default 42 matches select_optimal_clusters's own "
+                         "random_state=42 convention used under --k-clusters auto.")
     ap.add_argument("--k-clusters", default="auto",
                     help="'auto' (dynamic Elbow+BIC+Silhouette) or an integer.")
     ap.add_argument("--cluster-criterion", default="consensus",
@@ -280,13 +287,13 @@ def main(argv=None) -> int:
         rec = observe_coupling(
             L_gpu, float(K), p_base, grid_n, args.grid_lo, args.grid_hi,
             args.k_clusters, args.cluster_criterion, device,
-            vps_norm=args.vps_norm)
+            vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed)
         cfg = dict(coupling=rec["coupling"], slice_node_x=args.node_x,
                    slice_node_y=args.node_y, n_osc=n_dti, grid_n=grid_n,
                    k_clusters=rec["k_used"], grid_lo=args.grid_lo,
                    grid_hi=args.grid_hi, sigma=p_base.sigma, rho=p_base.rho,
                    beta=p_base.beta, dt=p_base.dt, tmax=p_base.tmax,
-                   vps_norm=args.vps_norm)
+                   vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed)
         npz_path = out_dir / npz_name(args.node_x, args.node_y, float(K))
         np.savez_compressed(
             npz_path, Xg=rec["Xg"], Yg=rec["Yg"], labels=rec["labels"],

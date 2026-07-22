@@ -380,6 +380,7 @@ def kmeans_gpu(
     k      : int,
     n_iter : int   = 300,
     tol    : float = 1e-4,
+    seed   : int   = 42,
 ) -> torch.Tensor:
     """
     Lloyd's k-means entirely on GPU — no sklearn, no CPU round-trips.
@@ -401,6 +402,14 @@ def kmeans_gpu(
     k      : number of clusters
     n_iter : max Lloyd iterations
     tol    : centroid shift convergence threshold (L2 norm)
+    seed   : Forgy-init seed, via a local torch.Generator (does not touch
+             global RNG state). Previously unseeded (plain torch.randperm on
+             the global generator), so every invocation landed in a
+             different local optimum -- confounded a VPS-norm comparison
+             that (correctly) held everything else fixed. Default 42
+             matches select_optimal_clusters's random_state=42 convention,
+             so both clustering paths in this codebase are now equally
+             reproducible by default.
 
     Returns
     -------
@@ -414,8 +423,13 @@ def kmeans_gpu(
     # Single clean line — no dead mu/std variables.
     Xn = (X - X.mean(dim=0, keepdim=True)) / (X.std(dim=0, keepdim=True) + 1e-8)
 
-    # Forgy initialisation: pick k random samples as starting centroids
-    idx       = torch.randperm(B, device=X.device)[:k]
+    # Forgy initialisation: pick k random samples as starting centroids,
+    # from a seeded local generator so runs are reproducible without
+    # mutating torch's global RNG state (which the rest of the pipeline,
+    # e.g. the IC jitter elsewhere, may still depend on being unseeded).
+    gen = torch.Generator(device=X.device)
+    gen.manual_seed(seed)
+    idx       = torch.randperm(B, device=X.device, generator=gen)[:k]
     centroids = Xn[idx].clone()                 # (k, D)
     labels    = torch.zeros(B, dtype=torch.long, device=X.device)
 
