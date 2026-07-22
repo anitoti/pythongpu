@@ -10,7 +10,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
+#SBATCH --mem=24G
 #SBATCH --array=0-3
 #SBATCH --output=logs/true_vps_prod_%A_%a.out
 #
@@ -18,11 +18,31 @@
 # cross-correlation + lag alignment) on real integrated Lorenz-DTI data,
 # instead of only the static Example_A_3.mat test matrix it was validated
 # against so far (talk/figs/alignment_bias.png). Uses run_sweep_true_vps
-# (pythongpu/pipeline/lorenz_sweep.py), which chunks over the IC batch and
-# auto-halves chunk size on OOM -- the true VPS needs the WHOLE recorded
-# trajectory per pair for the lag search, so memory is O(chunk*T*N) instead
-# of the O(B*C) the streaming surrogate gets away with (see
-# run_sweep_true_vps's docstring and vps-code-purpose memo).
+# (pythongpu/pipeline/lorenz_sweep.py), which chunks over BOTH the IC batch
+# and the node-pair axis and auto-halves either on OOM -- the true VPS
+# needs the WHOLE recorded trajectory per pair for the lag search, so
+# memory is O(chunk_size * T * pair_chunk_size), not O(B * C(N,2)) like
+# the streaming surrogate gets away with.
+#
+# ATTEMPT #1 (job 4556141) FAILED: --true-vps-chunk-size=64 with NO pair
+# chunking (i.e. pair_chunk_size=C=3403) OOM-killed all 4 tasks under a
+# 48GB cgroup limit, on the FIRST chunk. The original ~550MB/IC estimate
+# only counted 1-2 of the SIX (chunk, T, C) tensors alive at once during
+# the lag search (corr, ti, tj, valid, xi, xj) -- the real number was
+# several times higher. Fix: added pair_chunk_size chunking inside
+# vector_pattern_state_batched (pythongpu/processing/feature_extraction.py)
+# so those six tensors are bounded by pair_chunk_size, not the full C=3403.
+#
+# MEMORY (attempt #2, measured not estimated): one chunk at
+# chunk_size=64, pair_chunk_size=400, T=10000 (production tmax=500,
+# dt=0.05) peaked at 9.9GB RSS, measured directly via `/usr/bin/time -v`
+# on this machine, CPU-only (torch.device("cpu")) to match ACRES's
+# general partition having no GPU. --mem=24G leaves ~14GB margin over
+# that measurement for the main process, k-means, and box-counting.
+# run_sweep_true_vps's two-level auto-halving (pair_chunk_size first --
+# cheap, reuses the already-integrated trajectory; chunk_size only if
+# that's not enough -- expensive, re-integrates) is still live as a
+# fallback if this real-but-single-run measurement doesn't generalize.
 #
 # Same K ladder, node pair, grid_n, and tmax as the EXISTING streaming-
 # surrogate files this compares against (data/derivatives/
@@ -33,23 +53,12 @@
 # difference in the result is attributable to the VPS definition itself,
 # not a confound from resolution or coupling.
 #
-# MEMORY: true VPS's FFT/lag-search buffers dominate over the raw
-# trajectory -- roughly 550 MB per IC at T=10000, C(83,2)=3403 pairs
-# (T * C * 8 bytes * ~2 for the rfft/irfft working buffers). At grid_n=96,
-# B=9216 ICs; --true-vps-chunk-size=64 keeps one chunk's peak at
-# ~64 * 550MB =~ 35GB, well under --mem=48G's 13GB margin for the RK4
-# trajectory buffer (~640MB/chunk) and k-means/box-counting temporaries.
-# The auto-halving in run_sweep_true_vps is still live as a fallback if
-# this estimate is wrong, same safety net as the smoke test that already
-# demonstrated it (chunk_size=512 -> OOM -> halved to 256 -> completed).
-#
-# RUNTIME: total RK4 integration work (B * steps_record node-updates) is
-# identical to what the streaming-surrogate run already completed for
-# these same files, so integration cost should be comparable; the FFT lag
-# search adds overhead on top, chunked over ~144 chunks (9216/64) instead
-# of one shot. 12h budget is a margin, not a measured number -- this is the
-# FIRST production run of the true VPS, unlike the benchmark-grounded
-# --time in submit_vps_norm_comparison.sh.
+# RUNTIME: the same memory probe measured ~100s wall-clock for one 64-IC
+# chunk at T=10000. At grid_n=96 (B=9216), that's 9216/64=144 chunks per
+# task, ~4h per task -- all 4 array tasks run in parallel, so ~4h to
+# completion, well inside the 12h budget. Grounded in one measured chunk,
+# not a full production run, so treat as an estimate with real headroom,
+# not a guarantee.
 
 set -euo pipefail
 
@@ -74,13 +83,15 @@ NODE_X=${NODE_X:-73}
 NODE_Y=${NODE_Y:-81}
 GRID_N=${GRID_N:-96}
 CHUNK=${CHUNK:-64}
+PAIR_CHUNK=${PAIR_CHUNK:-400}
 ALIGNMENT=${ALIGNMENT:-corrected}
 
 OUTDIR="data/derivatives/true_vps_c${K//./_}"
 mkdir -p "$OUTDIR"
 
 echo "[task ${SLURM_ARRAY_TASK_ID}] true VPS  K=${K}  grid_n=${GRID_N}  " \
-     "nodes=${NODE_X},${NODE_Y}  chunk=${CHUNK}  alignment=${ALIGNMENT} -> ${OUTDIR}"
+     "nodes=${NODE_X},${NODE_Y}  chunk=${CHUNK}  pair_chunk=${PAIR_CHUNK}  " \
+     "alignment=${ALIGNMENT} -> ${OUTDIR}"
 
 python3 -m pythongpu.pipeline.lorenz_fine_coupling_sweep \
     --dti-path data/DTI-og.mat \
@@ -88,5 +99,5 @@ python3 -m pythongpu.pipeline.lorenz_fine_coupling_sweep \
     --k-start "$K" --k-stop "$K" --k-step 0.025 \
     --grid-n "$GRID_N" --k-clusters 2 --kmeans-seed 42 \
     --vps-method true --true-vps-alignment "$ALIGNMENT" \
-    --true-vps-chunk-size "$CHUNK" \
+    --true-vps-chunk-size "$CHUNK" --true-vps-pair-chunk-size "$PAIR_CHUNK" \
     --outdir "$OUTDIR"

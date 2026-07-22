@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 from pathlib import Path
@@ -117,7 +118,8 @@ def vector_pattern_state_fast(x: torch.Tensor, alpha: float = 1.0,
 
 
 def vector_pattern_state_batched(x: torch.Tensor, alpha: float = 1.0,
-                                 alignment: str = "corrected") -> torch.Tensor:
+                                 alignment: str = "corrected",
+                                 pair_chunk_size: int | None = None) -> torch.Tensor:
     """
     Same statistic as vector_pattern_state_fast, with a leading batch dim B
     (one initial condition per row) so the true (lag-based) VPS can run on a
@@ -127,6 +129,20 @@ def vector_pattern_state_batched(x: torch.Tensor, alpha: float = 1.0,
     returns : (B, 2*C(n,2))  -- [tau_1..tau_C, L_1..L_C] per row, same layout
     as run_sweep_streaming's vps output so it drops into the same downstream
     k-means/box-counting code.
+
+    pair_chunk_size: process this many of the C(n,2) node pairs at a time
+    instead of all of them at once. NEEDED because six separate (B, T, C)
+    tensors are alive simultaneously per pair batch (corr, ti, tj, valid,
+    xi, xj) -- a first production run at B=64, T=10000, C=3403 with no pair
+    chunking (i.e. pair_chunk_size=C) was OOM-killed under a 48GB cgroup
+    limit: the true peak is ~6x a single (B,T,C) tensor's size, not 1x or
+    2x, an estimate this project got wrong once already (see the
+    IC-batch-only chunking in run_sweep_true_vps, which alone was NOT
+    enough). `x`'s own FFT (xf) is computed once, outside the pair loop --
+    it's tiny (B, T, n), not (B, T, C) -- and reused across pair chunks.
+    Default: all C pairs at once (matches the pre-chunking behaviour);
+    callers doing a full production sweep should pass an explicit,
+    memory-budgeted value (see run_sweep_true_vps).
     """
     if alignment not in ("corrected", "matlab"):
         raise ValueError(f"alignment must be 'corrected' or 'matlab', got {alignment!r}")
@@ -135,28 +151,44 @@ def vector_pattern_state_batched(x: torch.Tensor, alpha: float = 1.0,
         raise ValueError("Expected at least two oscillators")
     idx = torch.triu_indices(n, n, offset=1, device=x.device)
     i_p, j_p = idx[0], idx[1]
+    C = i_p.shape[0]
+    pc = pair_chunk_size or C
 
     pad = 2 * T - 1
-    xf = torch.fft.rfft(x, n=pad, dim=1)                                    # (B, F, n)
-    corr = torch.fft.irfft(xf[..., i_p] * torch.conj(xf[..., j_p]), n=pad, dim=1)  # (B, pad, C)
-    li = torch.argmax(corr, dim=1)                                          # (B, C)
-    tau = torch.where(li >= T, li - pad, li)
+    xf = torch.fft.rfft(x, n=pad, dim=1)                                    # (B, F, n) -- shared
 
-    shift = tau.abs()
-    if alignment == "matlab":
-        shift = torch.clamp(shift - 1, min=0)
-
-    shift_i = torch.where(tau > 0, shift, torch.zeros_like(shift))          # (B, C)
-    shift_j = torch.where(tau < 0, shift, torch.zeros_like(shift))
     t = torch.arange(T, device=x.device)[None, :, None]                    # (1, T, 1)
-    ti = (t + shift_i[:, None, :]).clamp(max=T - 1)                        # (B, T, C)
-    tj = (t + shift_j[:, None, :]).clamp(max=T - 1)
-    valid = (t + shift_i[:, None, :] < T) & (t + shift_j[:, None, :] < T)
+    tau_parts, L_parts = [], []
+    for s in range(0, C, pc):
+        e = min(s + pc, C)
+        ip, jp = i_p[s:e], j_p[s:e]
 
-    xi = torch.gather(x[..., i_p], dim=1, index=ti)                        # (B, T, C)
-    xj = torch.gather(x[..., j_p], dim=1, index=tj)
-    L = torch.linalg.norm((xi - xj) * valid, dim=1)                        # (B, C)
-    return torch.cat([tau.to(L.dtype), L * alpha], dim=-1)                 # (B, 2C)
+        corr = torch.fft.irfft(xf[..., ip] * torch.conj(xf[..., jp]), n=pad, dim=1)  # (B, pad, c)
+        li = torch.argmax(corr, dim=1)                                      # (B, c)
+        tau = torch.where(li >= T, li - pad, li)
+        del corr, li
+
+        shift = tau.abs()
+        if alignment == "matlab":
+            shift = torch.clamp(shift - 1, min=0)
+
+        shift_i = torch.where(tau > 0, shift, torch.zeros_like(shift))      # (B, c)
+        shift_j = torch.where(tau < 0, shift, torch.zeros_like(shift))
+        ti = (t + shift_i[:, None, :]).clamp(max=T - 1)                    # (B, T, c)
+        tj = (t + shift_j[:, None, :]).clamp(max=T - 1)
+        valid = (t + shift_i[:, None, :] < T) & (t + shift_j[:, None, :] < T)
+
+        xi = torch.gather(x[..., ip], dim=1, index=ti)                     # (B, T, c)
+        xj = torch.gather(x[..., jp], dim=1, index=tj)
+        L = torch.linalg.norm((xi - xj) * valid, dim=1)                    # (B, c)
+        del shift, shift_i, shift_j, ti, tj, valid, xi, xj
+
+        tau_parts.append(tau.to(L.dtype))
+        L_parts.append(L * alpha)
+
+    tau_all = torch.cat(tau_parts, dim=-1)
+    L_all = torch.cat(L_parts, dim=-1)
+    return torch.cat([tau_all, L_all], dim=-1)                             # (B, 2C)
 
 
 def KmeansBIC(ClusterNums, SumD, N, d):

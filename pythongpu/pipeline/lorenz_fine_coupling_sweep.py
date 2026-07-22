@@ -91,7 +91,8 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
                      cluster_criterion: str, device: torch.device,
                      vps_norm: str | float = "l2", kmeans_seed: int = 42,
                      vps_method: str = "streaming", true_vps_alignment: str = "corrected",
-                     true_vps_chunk_size: int | None = None) -> dict:
+                     true_vps_chunk_size: int | None = None,
+                     true_vps_pair_chunk_size: int | None = None) -> dict:
     """Integrate, cluster, and quantify the basin geometry for one K.
 
     vps_method: "streaming" (default, O(1)-in-T Welford surrogate, no lag
@@ -118,7 +119,8 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
     elif vps_method == "true":
         vectors_gpu, mean_x_gpu = run_sweep_true_vps(
             x0, L_gpu, p, device, alignment=true_vps_alignment,
-            chunk_size=true_vps_chunk_size, return_mean_x=True)
+            chunk_size=true_vps_chunk_size, pair_chunk_size=true_vps_pair_chunk_size,
+            return_mean_x=True)
     else:
         raise ValueError(f"vps_method must be 'streaming' or 'true', got {vps_method!r}")
     vectors = vectors_gpu.cpu().numpy()
@@ -275,8 +277,15 @@ def main(argv=None) -> int:
                          "pairs worse, mean ratio 1.96x on Example_A_3) -- kept for exact "
                          "replication, not recommended for new results.")
     ap.add_argument("--true-vps-chunk-size", type=int, default=None,
-                    help="Only used with --vps-method true. ICs processed per GPU chunk; "
-                         "auto-halves on OOM. Default: min(B, 512).")
+                    help="Only used with --vps-method true. ICs processed per chunk during "
+                         "integration; auto-halves on OOM (expensive retry -- re-integrates). "
+                         "Default: min(B, 512).")
+    ap.add_argument("--true-vps-pair-chunk-size", type=int, default=None,
+                    help="Only used with --vps-method true. Node PAIRS processed per chunk "
+                         "during the lag-correlation step; auto-halves on OOM (cheap retry -- "
+                         "reuses the already-integrated trajectory). This is the dominant "
+                         "memory cost, not --true-vps-chunk-size: six (chunk, T, pair_chunk) "
+                         "tensors are alive at once per pair batch. Default: min(C(N,2), 400).")
     ap.add_argument("--k-clusters", default="auto",
                     help="'auto' (dynamic Elbow+BIC+Silhouette) or an integer.")
     ap.add_argument("--cluster-criterion", default="consensus",
@@ -322,7 +331,8 @@ def main(argv=None) -> int:
             args.k_clusters, args.cluster_criterion, device,
             vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed,
             vps_method=args.vps_method, true_vps_alignment=args.true_vps_alignment,
-            true_vps_chunk_size=args.true_vps_chunk_size)
+            true_vps_chunk_size=args.true_vps_chunk_size,
+            true_vps_pair_chunk_size=args.true_vps_pair_chunk_size)
         cfg = dict(coupling=rec["coupling"], slice_node_x=args.node_x,
                    slice_node_y=args.node_y, n_osc=n_dti, grid_n=grid_n,
                    k_clusters=rec["k_used"], grid_lo=args.grid_lo,

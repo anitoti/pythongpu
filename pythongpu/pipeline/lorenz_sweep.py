@@ -376,6 +376,16 @@ def run_sweep_streaming(
 # ═══════════════════════════════════════════════════════════════════════════
 # 4b.  TRUE VPS (lag-based, paper's Definition A) — chunked, memory-safe
 # ═══════════════════════════════════════════════════════════════════════════
+def _is_oom(e: Exception) -> bool:
+    # On CPU (ACRES's general partition has no GPU) an allocation failure
+    # surfaces as MemoryError or a RuntimeError whose message names memory,
+    # not torch.cuda.OutOfMemoryError -- catch both, but let anything that
+    # isn't actually a memory failure propagate so a real bug doesn't get
+    # silently swallowed by a halving retry loop.
+    return isinstance(e, (torch.cuda.OutOfMemoryError, MemoryError)) or \
+        "memory" in str(e).lower() or "alloc" in str(e).lower()
+
+
 @torch.no_grad()
 def run_sweep_true_vps(
     x0         : torch.Tensor,
@@ -384,24 +394,40 @@ def run_sweep_true_vps(
     device     : torch.device,
     alignment  : str = "corrected",
     chunk_size : int | None = None,
+    pair_chunk_size : int | None = None,
     return_mean_x: bool = False,
 ):
     """
     True (lag-based) VPS on a full grid sweep, not just the paper's static
     test matrix. Unlike run_sweep_streaming, the lag search needs the WHOLE
     recorded trajectory per pair, so it can't be folded into an O(1)
-    running statistic -- memory is O(chunk_size * T * N) instead of
-    O(B * C(N,2)), which is why this runs in chunks over the IC batch B
-    rather than all at once (all-at-once is what threw the ~41GB OOM this
-    project hit earlier; see vps-code-purpose memo).
+    running statistic.
+
+    TWO independent chunk axes, because they trade off different costs:
+
+    - `chunk_size` (over the IC batch B): bounds the (chunk_size, T, N)
+      trajectory buffer. Cheap to shrink, since re-integrating a smaller IC
+      chunk from scratch just redoes RK4 steps (fast).
+    - `pair_chunk_size` (over the C(N,2) node pairs, passed through to
+      vector_pattern_state_batched): bounds the SIX (chunk_size, T, c)
+      tensors alive per pair-batch during the lag search (corr, ti, tj,
+      valid, xi, xj). This is the dominant cost and the one a first
+      production run got badly wrong: chunk_size=64 with NO pair chunking
+      (i.e. pair_chunk_size=C=3403) was OOM-killed under a 48GB cgroup
+      limit, because six (64, 10000, 3403) tensors is far more than the
+      "~550MB/IC" estimate this project used the first time -- that
+      estimate only budgeted one or two of the six. Retrying a pair-chunk
+      OOM is cheap (the trajectory is already integrated and stays in
+      memory); retrying an IC-chunk OOM is not (full RK4 re-integration),
+      so pair-chunk failures are handled first and don't touch chunk_size.
 
     Only the X channel is recorded per timestep (matches the paper's own
     VPS input and the lobe-locking sign(mean_x) convention) -- Y, Z are
     integrated but discarded each step, same as run_sweep_streaming.
 
-    Chunk size starts at `chunk_size` (or a conservative default) and HALVES
-    automatically on a CUDA OOM, retrying the same chunk of ICs -- so this
-    is safe to call with an optimistic starting guess.
+    Both chunk sizes start at their given value (or a conservative default)
+    and HALVE automatically on OOM, so this is safe to call with an
+    optimistic starting guess.
 
     Returns
     -------
@@ -411,7 +437,9 @@ def run_sweep_true_vps(
     mean_x : (B, N), only when return_mean_x=True, as (vps, mean_x).
     """
     B, N, _ = x0.shape
+    C_total = N * (N - 1) // 2
     cur_chunk = chunk_size or min(B, 512)
+    cur_pair_chunk = pair_chunk_size or min(C_total, 400)
 
     vps_chunks: list[torch.Tensor] = []
     mean_x_chunks: list[torch.Tensor] | None = [] if return_mean_x else None
@@ -427,7 +455,26 @@ def run_sweep_true_vps(
                 x_chunk = rk4_step_batched(x_chunk, L_gpu, p)
                 traj[:, step, :] = x_chunk[..., 0]
 
-            vps_chunks.append(vector_pattern_state_batched(traj, alignment=alignment))
+            # Inner retry: shrink pair_chunk_size, NOT chunk_size -- traj is
+            # already computed and reused across retries, so this doesn't
+            # waste the (expensive) integration above.
+            while True:
+                try:
+                    vps_chunk = vector_pattern_state_batched(
+                        traj, alignment=alignment, pair_chunk_size=cur_pair_chunk)
+                    break
+                except (torch.cuda.OutOfMemoryError, MemoryError, RuntimeError) as e2:
+                    if not _is_oom(e2):
+                        raise
+                    if device.type == "cuda":
+                        torch.cuda.empty_cache()
+                    if cur_pair_chunk <= 1:
+                        raise
+                    cur_pair_chunk = max(1, cur_pair_chunk // 2)
+                    print(f"[true-vps] OOM in pair correlation, halving pair_chunk_size "
+                          f"to {cur_pair_chunk} (ICs [{start}:{end}] stay integrated)")
+
+            vps_chunks.append(vps_chunk)
             if mean_x_chunks is not None:
                 mean_x_chunks.append(traj.mean(dim=1))
 
@@ -436,22 +483,15 @@ def run_sweep_true_vps(
                 torch.cuda.empty_cache()
             start = end
         except (torch.cuda.OutOfMemoryError, MemoryError, RuntimeError) as e:
-            # On CPU (ACRES's general partition has no GPU) an allocation
-            # failure surfaces as MemoryError or a RuntimeError whose message
-            # names memory, not torch.cuda.OutOfMemoryError -- catch both,
-            # but re-raise anything that isn't actually a memory failure so a
-            # real bug doesn't get silently swallowed by the halving loop.
-            is_oom = isinstance(e, (torch.cuda.OutOfMemoryError, MemoryError)) or \
-                "memory" in str(e).lower() or "alloc" in str(e).lower()
-            if not is_oom:
+            if not _is_oom(e):
                 raise
             if device.type == "cuda":
                 torch.cuda.empty_cache()
             if cur_chunk <= 1:
                 raise
             cur_chunk = max(1, cur_chunk // 2)
-            print(f"[true-vps] OOM at chunk_size, halving to {cur_chunk} and retrying "
-                  f"ICs [{start}:{min(start + cur_chunk, B)}]")
+            print(f"[true-vps] OOM integrating IC chunk, halving chunk_size to {cur_chunk} "
+                  f"and retrying ICs [{start}:{min(start + cur_chunk, B)}]")
 
     tau_L = torch.cat(vps_chunks, dim=0)                # (B, 2C)
     C = tau_L.shape[1] // 2
