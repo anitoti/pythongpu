@@ -53,6 +53,7 @@ from pythongpu.pipeline.lorenz_sweep import (
     LorenzParams,
     rk4_step_batched,
     run_sweep_streaming,
+    run_sweep_true_vps,
 )
 from pythongpu.processing.basin_clustering import select_optimal_clusters
 from pythongpu.processing.box_counting import (
@@ -88,8 +89,17 @@ def build_slice(p: LorenzParams, grid_n: int, grid_lo: float, grid_hi: float,
 def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
                      grid_lo: float, grid_hi: float, k_clusters,
                      cluster_criterion: str, device: torch.device,
-                     vps_norm: str | float = "l2", kmeans_seed: int = 42) -> dict:
-    """Integrate, cluster, and quantify the basin geometry for one K."""
+                     vps_norm: str | float = "l2", kmeans_seed: int = 42,
+                     vps_method: str = "streaming", true_vps_alignment: str = "corrected",
+                     true_vps_chunk_size: int | None = None) -> dict:
+    """Integrate, cluster, and quantify the basin geometry for one K.
+
+    vps_method: "streaming" (default, O(1)-in-T Welford surrogate, no lag
+    search -- see plot_vps_clv_comparison.py's docstring for why this is
+    NOT the paper's VPS) or "true" (the paper's own lag-based cross-
+    correlation statistic, run_sweep_true_vps, chunked over the IC batch
+    to stay within GPU memory -- see run_sweep_true_vps's docstring).
+    """
     p = LorenzParams(
         sigma=p_base.sigma, rho=p_base.rho, beta=p_base.beta,
         coupling=coupling, dt=p_base.dt,
@@ -101,8 +111,16 @@ def observe_coupling(L_gpu, coupling: float, p_base: LorenzParams, grid_n: int,
 
     for _ in range(p.steps_transient):
         x0 = rk4_step_batched(x0, L_gpu, p)
-    vectors_gpu, mean_x_gpu = run_sweep_streaming(
-        x0, L_gpu, p, device, return_mean_x=True, norm=vps_norm)
+
+    if vps_method == "streaming":
+        vectors_gpu, mean_x_gpu = run_sweep_streaming(
+            x0, L_gpu, p, device, return_mean_x=True, norm=vps_norm)
+    elif vps_method == "true":
+        vectors_gpu, mean_x_gpu = run_sweep_true_vps(
+            x0, L_gpu, p, device, alignment=true_vps_alignment,
+            chunk_size=true_vps_chunk_size, return_mean_x=True)
+    else:
+        raise ValueError(f"vps_method must be 'streaming' or 'true', got {vps_method!r}")
     vectors = vectors_gpu.cpu().numpy()
 
     # ── clustering-free lobe-locking label field ──────────────────────
@@ -244,6 +262,21 @@ def main(argv=None) -> int:
                          "any comparison (e.g. across --vps-norm) that held everything "
                          "else fixed. Default 42 matches select_optimal_clusters's own "
                          "random_state=42 convention used under --k-clusters auto.")
+    ap.add_argument("--vps-method", default="streaming", choices=["streaming", "true"],
+                    help="'streaming' (default): O(1)-in-T Welford surrogate, no lag search -- "
+                         "NOT the paper's VPS, see plot_vps_clv_comparison.py docstring. "
+                         "'true': the paper's own lag-based cross-correlation VPS "
+                         "(run_sweep_true_vps), chunked over the IC batch so it fits in GPU "
+                         "memory instead of materialising the full (B,T,N) trajectory at once.")
+    ap.add_argument("--true-vps-alignment", default="corrected", choices=["corrected", "matlab"],
+                    help="Only used with --vps-method true. 'corrected' shifts by the full "
+                         "lag |tau| (what the measured lag means). 'matlab' shifts by |tau|-1, "
+                         "reproducing the paper's reference-implementation off-by-one (36/36 "
+                         "pairs worse, mean ratio 1.96x on Example_A_3) -- kept for exact "
+                         "replication, not recommended for new results.")
+    ap.add_argument("--true-vps-chunk-size", type=int, default=None,
+                    help="Only used with --vps-method true. ICs processed per GPU chunk; "
+                         "auto-halves on OOM. Default: min(B, 512).")
     ap.add_argument("--k-clusters", default="auto",
                     help="'auto' (dynamic Elbow+BIC+Silhouette) or an integer.")
     ap.add_argument("--cluster-criterion", default="consensus",
@@ -287,13 +320,16 @@ def main(argv=None) -> int:
         rec = observe_coupling(
             L_gpu, float(K), p_base, grid_n, args.grid_lo, args.grid_hi,
             args.k_clusters, args.cluster_criterion, device,
-            vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed)
+            vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed,
+            vps_method=args.vps_method, true_vps_alignment=args.true_vps_alignment,
+            true_vps_chunk_size=args.true_vps_chunk_size)
         cfg = dict(coupling=rec["coupling"], slice_node_x=args.node_x,
                    slice_node_y=args.node_y, n_osc=n_dti, grid_n=grid_n,
                    k_clusters=rec["k_used"], grid_lo=args.grid_lo,
                    grid_hi=args.grid_hi, sigma=p_base.sigma, rho=p_base.rho,
                    beta=p_base.beta, dt=p_base.dt, tmax=p_base.tmax,
-                   vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed)
+                   vps_norm=args.vps_norm, kmeans_seed=args.kmeans_seed,
+                   vps_method=args.vps_method, true_vps_alignment=args.true_vps_alignment)
         npz_path = out_dir / npz_name(args.node_x, args.node_y, float(K))
         np.savez_compressed(
             npz_path, Xg=rec["Xg"], Yg=rec["Yg"], labels=rec["labels"],

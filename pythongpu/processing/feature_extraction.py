@@ -116,6 +116,49 @@ def vector_pattern_state_fast(x: torch.Tensor, alpha: float = 1.0,
     return torch.cat([tau.to(L.dtype), L * alpha])
 
 
+def vector_pattern_state_batched(x: torch.Tensor, alpha: float = 1.0,
+                                 alignment: str = "corrected") -> torch.Tensor:
+    """
+    Same statistic as vector_pattern_state_fast, with a leading batch dim B
+    (one initial condition per row) so the true (lag-based) VPS can run on a
+    whole grid sweep instead of only the paper's static test matrix.
+
+    x : (B, T, n)  -- B initial conditions, T timesteps, n oscillators
+    returns : (B, 2*C(n,2))  -- [tau_1..tau_C, L_1..L_C] per row, same layout
+    as run_sweep_streaming's vps output so it drops into the same downstream
+    k-means/box-counting code.
+    """
+    if alignment not in ("corrected", "matlab"):
+        raise ValueError(f"alignment must be 'corrected' or 'matlab', got {alignment!r}")
+    B, T, n = x.shape
+    if n < 2:
+        raise ValueError("Expected at least two oscillators")
+    idx = torch.triu_indices(n, n, offset=1, device=x.device)
+    i_p, j_p = idx[0], idx[1]
+
+    pad = 2 * T - 1
+    xf = torch.fft.rfft(x, n=pad, dim=1)                                    # (B, F, n)
+    corr = torch.fft.irfft(xf[..., i_p] * torch.conj(xf[..., j_p]), n=pad, dim=1)  # (B, pad, C)
+    li = torch.argmax(corr, dim=1)                                          # (B, C)
+    tau = torch.where(li >= T, li - pad, li)
+
+    shift = tau.abs()
+    if alignment == "matlab":
+        shift = torch.clamp(shift - 1, min=0)
+
+    shift_i = torch.where(tau > 0, shift, torch.zeros_like(shift))          # (B, C)
+    shift_j = torch.where(tau < 0, shift, torch.zeros_like(shift))
+    t = torch.arange(T, device=x.device)[None, :, None]                    # (1, T, 1)
+    ti = (t + shift_i[:, None, :]).clamp(max=T - 1)                        # (B, T, C)
+    tj = (t + shift_j[:, None, :]).clamp(max=T - 1)
+    valid = (t + shift_i[:, None, :] < T) & (t + shift_j[:, None, :] < T)
+
+    xi = torch.gather(x[..., i_p], dim=1, index=ti)                        # (B, T, C)
+    xj = torch.gather(x[..., j_p], dim=1, index=tj)
+    L = torch.linalg.norm((xi - xj) * valid, dim=1)                        # (B, C)
+    return torch.cat([tau.to(L.dtype), L * alpha], dim=-1)                 # (B, 2C)
+
+
 def KmeansBIC(ClusterNums, SumD, N, d):
     _, counts = np.unique(ClusterNums, return_counts=True)
     C = counts

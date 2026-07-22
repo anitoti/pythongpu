@@ -80,6 +80,7 @@ from pythongpu.networks.random_graphs import (
 )
 from pythongpu.processing.box_counting import boxcount_2d_gpu, fractal_dimension, boxdiv2, extract_boundary
 from pythongpu.processing.basin_clustering import select_optimal_clusters, plot_selection
+from pythongpu.processing.feature_extraction import vector_pattern_state_batched
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -368,6 +369,102 @@ def run_sweep_streaming(
     vps = torch.cat([tau_x_std, mean_L_std], dim=-1)
     if mean_x is not None:
         return vps, mean_x
+    return vps
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4b.  TRUE VPS (lag-based, paper's Definition A) — chunked, memory-safe
+# ═══════════════════════════════════════════════════════════════════════════
+@torch.no_grad()
+def run_sweep_true_vps(
+    x0         : torch.Tensor,
+    L_gpu      : torch.Tensor,
+    p          : LorenzParams,
+    device     : torch.device,
+    alignment  : str = "corrected",
+    chunk_size : int | None = None,
+    return_mean_x: bool = False,
+):
+    """
+    True (lag-based) VPS on a full grid sweep, not just the paper's static
+    test matrix. Unlike run_sweep_streaming, the lag search needs the WHOLE
+    recorded trajectory per pair, so it can't be folded into an O(1)
+    running statistic -- memory is O(chunk_size * T * N) instead of
+    O(B * C(N,2)), which is why this runs in chunks over the IC batch B
+    rather than all at once (all-at-once is what threw the ~41GB OOM this
+    project hit earlier; see vps-code-purpose memo).
+
+    Only the X channel is recorded per timestep (matches the paper's own
+    VPS input and the lobe-locking sign(mean_x) convention) -- Y, Z are
+    integrated but discarded each step, same as run_sweep_streaming.
+
+    Chunk size starts at `chunk_size` (or a conservative default) and HALVES
+    automatically on a CUDA OOM, retrying the same chunk of ICs -- so this
+    is safe to call with an optimistic starting guess.
+
+    Returns
+    -------
+    vps : (B, 2*C(N,2)) -- same [tau, L] layout as run_sweep_streaming,
+          independently block-standardised so it's a drop-in replacement
+          for downstream k-means.
+    mean_x : (B, N), only when return_mean_x=True, as (vps, mean_x).
+    """
+    B, N, _ = x0.shape
+    cur_chunk = chunk_size or min(B, 512)
+
+    vps_chunks: list[torch.Tensor] = []
+    mean_x_chunks: list[torch.Tensor] | None = [] if return_mean_x else None
+
+    start = 0
+    while start < B:
+        end = min(start + cur_chunk, B)
+        try:
+            x_chunk = x0[start:end].clone()
+            Bc = end - start
+            traj = torch.empty(Bc, p.steps_record, N, device=device, dtype=x0.dtype)
+            for step in tqdm(range(p.steps_record), desc=f"true-vps[{start}:{end}]", leave=False):
+                x_chunk = rk4_step_batched(x_chunk, L_gpu, p)
+                traj[:, step, :] = x_chunk[..., 0]
+
+            vps_chunks.append(vector_pattern_state_batched(traj, alignment=alignment))
+            if mean_x_chunks is not None:
+                mean_x_chunks.append(traj.mean(dim=1))
+
+            del traj, x_chunk
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            start = end
+        except (torch.cuda.OutOfMemoryError, MemoryError, RuntimeError) as e:
+            # On CPU (ACRES's general partition has no GPU) an allocation
+            # failure surfaces as MemoryError or a RuntimeError whose message
+            # names memory, not torch.cuda.OutOfMemoryError -- catch both,
+            # but re-raise anything that isn't actually a memory failure so a
+            # real bug doesn't get silently swallowed by the halving loop.
+            is_oom = isinstance(e, (torch.cuda.OutOfMemoryError, MemoryError)) or \
+                "memory" in str(e).lower() or "alloc" in str(e).lower()
+            if not is_oom:
+                raise
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            if cur_chunk <= 1:
+                raise
+            cur_chunk = max(1, cur_chunk // 2)
+            print(f"[true-vps] OOM at chunk_size, halving to {cur_chunk} and retrying "
+                  f"ICs [{start}:{min(start + cur_chunk, B)}]")
+
+    tau_L = torch.cat(vps_chunks, dim=0)                # (B, 2C)
+    C = tau_L.shape[1] // 2
+    tau_x, mean_L = tau_L[:, :C], tau_L[:, C:]
+
+    # Same independent block-standardisation as run_sweep_streaming, so
+    # downstream k-means sees comparably-scaled features either way.
+    tau_x_std = (tau_x - tau_x.mean(dim=0, keepdim=True)) / (tau_x.std(dim=0, keepdim=True) + 1e-8)
+    mean_L_std = (mean_L - mean_L.mean(dim=0, keepdim=True)) / (mean_L.std(dim=0, keepdim=True) + 1e-8)
+    vps = torch.cat([tau_x_std, mean_L_std], dim=-1)
+
+    if mean_x_chunks is not None:
+        return vps, torch.cat(mean_x_chunks, dim=0)
     return vps
 
 
