@@ -21,13 +21,13 @@ clock is behind, cut to the **bold** sentence and move on.
 |---|---|---|---|
 | 1 | Title | 0:15 | 0:15 |
 | 2 | The Science | 1:00 | 1:15 |
-| 3 | The System & the Plane | 0:55 | 2:10 |
+| 3 | The System and the Viewing Plane | 0:55 | 2:10 |
 | 4 | Measuring Crinkliness + landmine | 0:55 | 3:05 |
 | 5 | My Project: port the VPS | 1:00 | 4:05 |
 | 6 | The Port Was Slow (HPC core) | 1:15 | 5:20 |
 | 7 | Did I Reproduce It? | 0:55 | 6:15 |
 | 8 | The Memory Wall | 0:55 | 7:10 |
-| 9 | Pipeline Reported + Detonates | 0:55 | 8:05 |
+| 9 | What the Pipeline Reported | 0:55 | 8:05 |
 | 10 | Validate the Ruler | 0:55 | 9:00 |
 | 11 | The Mechanism | 1:00 | 10:00 |
 | 12 | Where Locking Switches On | 0:55 | 10:55 |
@@ -66,7 +66,7 @@ project is its code.
 
 ---
 
-## 3 — The System & the Plane · *(0:55)*
+## 3 — The System and the Viewing Plane · *(0:55)*
 
 Here's the actual system. Eighty-three brain regions, each a chaotic **Lorenz
 oscillator**, wired together by a real human **DTI** scan through the graph
@@ -121,7 +121,7 @@ coupling per GPU. On ACRES that's **130,000 initial conditions per coupling at o
 
 ---
 
-## 6 — The Port Was Slow — and the FFT Wasn't Why · *(1:15)* — **HPC centerpiece**
+## 6 — The Port Was Slow: Diagnosing the Bottleneck · *(1:15)* — **HPC centerpiece**
 
 Here's the honest part. My first port was **slow** — it never cleared about seven
 times faster than a plain serial CPU version. At small sizes it was actually *slower*
@@ -181,7 +181,7 @@ including me. *That's* the HPC lesson people don't put on slides.
 
 ---
 
-## 9 — What the Pipeline Reported — and the Ambiguity Detonates · *(0:55)*
+## 9 — What the Pipeline Reported · *(0:55)*
 
 And at first the pipeline gave us **exactly the result the project wanted**:
 dimension between 1.9 and 1.96, gorgeous fits, near-total sensitivity. *(Short pause.)*
@@ -248,7 +248,7 @@ person exactly where to point the software.
 
 ---
 
-## 13 — The Result: The Basins Really Are Mingled · *(1:00)*
+## 13 — The Result: Basins Are Genuinely Mingled · *(1:00)*
 
 So I counted the attractors exactly, using those sign patterns. *(Point at the
 table.)* At coupling 0.2 and 0.5, essentially **every initial condition is its own
@@ -282,7 +282,7 @@ and that's the *only* reason the real mechanism ever surfaced.
 
 ---
 
-## 15 — Summary & Next · *(0:45)*
+## 15 — Summary and What's Next · *(0:55)*
 
 So, in one breath: I **built the fast plane-scanner** — 130,000 simulations at once,
 375 times over serial. I **tested my own port** and found it doesn't match the source

@@ -100,8 +100,8 @@
     \fill[Ochre] ([xshift=2.4cm]current page.south west) rectangle ([xshift=3.0cm]current page.north west);
   \end{tikzpicture}%
   \begin{columns}[c]
-    \column{0.05\textwidth}
-    \column{0.90\textwidth}
+    \column{0.30\textwidth}
+    \column{0.65\textwidth}
       \vspace{1.2cm}
       {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
       \vspace{0.25cm}
@@ -186,7 +186,7 @@ opposites and the brain refuses to choose. Name the paper — it's my advisor's,
 my whole project is its code. Draw the ridgeline in the air. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 3  SYSTEM + THE PLANE
-\begin{frame}{The System --- and the ``Plane'' We View It From}
+\begin{frame}{The System and the Viewing Plane}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -221,7 +221,7 @@ Laplacian point earns 15 s — row sums zero => synchrony always solves it, so `
 anything else survive?'' is THE question. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 4  MEASURE + LANDMINE
-\begin{frame}{Measuring Crinkliness --- and an Ambiguity to Remember}
+\begin{frame}{Measuring Crinkliness: A Key Ambiguity}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -259,7 +259,7 @@ anything else survive?'' is THE question. ~1.5 min.}
 line in the talk. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 5  MY PROJECT / THE PORT
-\begin{frame}[fragile]{My Project: Rapidly Scan the Plane --- Port the VPS to the GPU}
+\begin{frame}[fragile]{My Project: Porting the VPS to the GPU}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -306,7 +306,7 @@ tau   = torch.argmax(corr, dim=0)   # all 3403
 Define the VPS properly — tau is a TIME LAG; that matters two slides on. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 6  THE PORT WAS SLOW
-\begin{frame}[fragile]{The Port Was Slow --- and the FFT Wasn't Why}
+\begin{frame}[fragile]{The Port Was Slow: Diagnosing the Bottleneck}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -351,7 +351,7 @@ bottleneck is a Python loop, not the maths -> vectorise -> 375x, verified. ``The
 was never the problem. The loop after it was.'' ~2 min.}
 
 % ═════════════════════════════════════════════════════════ 7  DID I REPRODUCE IT?
-\begin{frame}[fragile]{Did I Actually Reproduce It? {\normalfont(I tested. No.)}}
+\begin{frame}[fragile]{Did I Actually Reproduce It?}
   \GeoPanels
   \vspace{0.1cm}
   A port is only a port if the numbers match. I transcribed
@@ -392,7 +392,7 @@ and the discrepancy may be a bug in the published code. Do NOT editorialise beyo
 ``this needs a conversation.'' ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 8  MEMORY WALL
-\begin{frame}{The Memory Wall --- and the Substitution It Forced}
+\begin{frame}{The Memory Wall and Its Forced Substitution}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -432,7 +432,7 @@ forced an approximation that quietly stopped computing the quantity the paper
 defines. Nobody noticed for weeks — including me. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 9  PIPELINE REPORTED + DETONATE
-\begin{frame}{What the Pipeline Reported --- and the Ambiguity Detonates}
+\begin{frame}{What the Pipeline Reported}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -534,7 +534,7 @@ combinatorially many. The label is a FACT, not an estimate — that's what kills
 clustering problem in this talk. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 12  ONSET CURVE
-\begin{frame}{Where Does the Locking Switch On? {\normalfont(the RAPS figure)}}
+\begin{frame}{Where Does the Locking Switch On?}
   \GeoPanels
   \vspace{0.05cm}
   \begin{columns}[T]
@@ -564,7 +564,7 @@ bifurcation underneath it. Punchline is practical: gel=0.5 is the WRONG place to
 to map basins. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 13  THE RESULT
-\begin{frame}{The Result: The Basins Really Are Mingled}
+\begin{frame}{The Result: Basins Are Genuinely Mingled}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -640,7 +640,7 @@ eight attractors — don't misrepresent it. ~1.5 min.}
 can say. Four wrong hypotheses, each killed by a control. ~1.5 min.}
 
 % ═════════════════════════════════════════════════════════ 15  SUMMARY + NEXT
-\begin{frame}{Summary --- and What's Next}
+\begin{frame}{Summary and What's Next}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
@@ -695,8 +695,8 @@ the referees, found the mechanism. End on the line, then questions. ~1.5 min.}
     \fill[Ochre] ([xshift=2.4cm]current page.south west) rectangle ([xshift=3.0cm]current page.north west);
   \end{tikzpicture}
   \begin{columns}[c]
-    \column{0.08\textwidth}
-    \column{0.9\textwidth}
+    \column{0.30\textwidth}
+    \column{0.65\textwidth}
       {\usebeamerfont{title}\color{Cream}\bfseries Thank you\par}
       \vspace{0.3cm}
       {\color{SandLight} Questions welcome.\par}
