@@ -1,0 +1,4 @@
+#!/bin/sh
+# Strip AI co-author trailers before they ever enter history.
+sed -i.bak -E '/^Co-Authored-By: .*(claude|anthropic).*/Id' "$1"
+rm -f "$1.bak"

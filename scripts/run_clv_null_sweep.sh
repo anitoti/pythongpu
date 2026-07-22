@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=clv-null-sweep
 #SBATCH --partition=gpu
-# GPU count (--gres) is managed by scripts/submit_clv_sweep.sh so CPU-partition
-# runs can omit it. If you sbatch THIS file directly and need a GPU, add --gres=gpu:1.
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=08:00:00
@@ -71,7 +70,7 @@ COUPLINGS=(0.05 0.10 0.15 0.20)
 
 for c in "${COUPLINGS[@]}"; do
   echo "Running pythongpu-clv (null-model) with coupling=${c} at $(date -u)"
-  pythongpu-clv --null-model --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 || {
+  pythongpu-clv --null-model --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 83 --K 83 || {
     echo "pythongpu-clv failed for coupling=${c}. Continuing to next value.";
     continue
   }

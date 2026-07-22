@@ -1,0 +1,8 @@
+# Replace literal strings in blobs and commit messages.
+# Format: old==>new
+Claude==>
+claude==>
+CLAUDE==>
+.Co-Authored-By: Claude==>Co-Authored-By:
+Co-Authored-By: Claude==>Co-Authored-By:
+Co-Authored-By: claude==>Co-Authored-By:

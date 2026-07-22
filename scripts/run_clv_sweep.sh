@@ -88,7 +88,7 @@ if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
   c=${COUPLINGS[$idx]}
   echo "Array task id=${idx} selecting coupling=${c}"
   echo "Running pythongpu-clv with coupling=${c} at $(date -u)"
-  pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 --coupling-mode x || {
+  pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 83 --K 83 --coupling-mode x || {
     echo "pythongpu-clv failed for coupling=${c}. Exiting with non-zero status.";
     exit 1
   }
@@ -97,7 +97,7 @@ else
   # not running as an array -- run sequentially for convenience
   for c in "${COUPLINGS[@]}"; do
     echo "Running pythongpu-clv with coupling=${c} at $(date -u)"
-    pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 10 --K 10 --coupling-mode x || {
+    pythongpu-clv --mat "$DTI_PATH" --outdir "$OUTDIR/clv_c${c//./_}" --coupling "$c" --steps 1000 --m 83 --K 83 --coupling-mode x || {
       echo "pythongpu-clv failed for coupling=${c}. Continuing to next value.";
       continue
     }
