@@ -289,6 +289,7 @@ def kmeans_gpu(
     k      : int,
     n_iter : int   = 300,
     tol    : float = 1e-4,
+    seed   : int   = 42,
 ) -> torch.Tensor:
     """
     Lloyd's k-means entirely on GPU — no sklearn, no CPU round-trips.
@@ -306,6 +307,9 @@ def kmeans_gpu(
     k      : number of clusters
     n_iter : max Lloyd iterations
     tol    : centroid shift convergence threshold (L2 norm)
+    seed   : Forgy-init seed, via a local torch.Generator (does not touch
+             global RNG state). Previously unseeded -- see
+             lorenz_sweep.py::kmeans_gpu for the full story.
 
     Returns
     -------
@@ -316,8 +320,11 @@ def kmeans_gpu(
     # Global normalisation — zero mean, unit std per feature across batch.
     Xn = (X - X.mean(dim=0, keepdim=True)) / (X.std(dim=0, keepdim=True) + 1e-8)
 
-    # Forgy initialisation: pick k random samples as starting centroids
-    idx       = torch.randperm(B, device=X.device)[:k]
+    # Forgy initialisation: pick k random samples as starting centroids,
+    # from a seeded local generator (reproducible, no global RNG side effects).
+    gen = torch.Generator(device=X.device)
+    gen.manual_seed(seed)
+    idx       = torch.randperm(B, device=X.device, generator=gen)[:k]
     centroids = Xn[idx].clone()                 # (k, D)
     labels    = torch.zeros(B, dtype=torch.long, device=X.device)
 

@@ -203,11 +203,16 @@ def kmeans_gpu(
     k      : int,
     n_iter : int   = 300,
     tol    : float = 1e-4,
+    seed   : int   = 42,
 ) -> tuple[torch.Tensor, float]:
+    # seed: Forgy-init seed via a local torch.Generator (does not touch global
+    # RNG state). Previously unseeded -- see lorenz_sweep.py::kmeans_gpu.
     B, D = X.shape
     Xn   = (X - X.mean(dim=0, keepdim=True)) / (X.std(dim=0, keepdim=True) + 1e-8)
 
-    idx       = torch.randperm(B, device=X.device)[:k]
+    gen       = torch.Generator(device=X.device)
+    gen.manual_seed(seed)
+    idx       = torch.randperm(B, device=X.device, generator=gen)[:k]
     centroids = Xn[idx].clone()
     labels    = torch.zeros(B, dtype=torch.long, device=X.device)
     dist      = torch.zeros(B, k, device=X.device)
