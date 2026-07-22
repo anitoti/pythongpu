@@ -362,6 +362,13 @@ def fig_cartoon():
         ax.set_xticks([])
         ax.set_yticks([])
         ax.grid(False)
+        # No numeric ticks -- this is a schematic, not a measured slice, so
+        # exact values would be false precision. But the axes DO mean
+        # something specific (this is literally what slide 3 introduces:
+        # a 2-D slice through the space of initial conditions, colour =
+        # which brain state that IC ends up in), so label what they are.
+        ax.set_xlabel("initial condition -- one coordinate", fontsize=9)
+        ax.set_ylabel("initial condition -- another coordinate", fontsize=9)
     fig.suptitle("Crinkliness is nimbleness   (illustrative)", fontsize=12)
     save(fig, "basin_cartoon.png")
 
