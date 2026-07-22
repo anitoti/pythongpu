@@ -9,15 +9,25 @@ Hypothesis
 ----------
 P_flip(delta) = P[perturbing an IC by magnitude delta changes its lobe-locking
 label] should, in the small-delta limit:
-  - decay to 0 for an ordinary (non-riddled) basin boundary — a point
+  - decay to 0 for an ordinary (non-riddled) basin interior — a point
     strictly interior to a basin needs a finite kick to reach the boundary.
-  - stay bounded away from 0 for a genuinely riddled basin — every
+  - stay bounded away from 0 near a genuinely riddled boundary — every
     neighborhood of every point already touches another basin.
 
-We sweep delta in [1e-8, 1e-1] (log-spaced) at three coupling values:
-  K=0.0  — uncoupled control, no riddling expected.
-  K=0.1  — onset region (lobe-locking-onset-curve: coin-flip reliability here).
-  K=0.5  — measured riddled regime (D_f ~ 1.9).
+REVISION (2026-07-22): the original design compared this signature across
+couplings (K=0.0 uncoupled control vs K=0.1 vs K=0.5), reusing the same base
+ICs -- located from the K=0.5 boundary field -- at every K. That control was
+invalid: at K=0.0 there is no locking at all (0.0% locked, Lambda~0.026 per
+the onset-curve data), so the lobe-sign label is already a coin flip on
+mean(X)~=0 before any perturbation is applied, and flips trivially at any
+delta. The K=0.0 curve was indistinguishable from K=0.5 for that reason, not
+because riddling was confirmed.
+
+The fixed design compares boundary vs interior points *within the same
+coupling* (--compare-boundary-interior), so both point sets have a valid
+label to begin with -- this is the actual riddling test: do boundary points
+flip more easily, and at smaller delta, than interior points, at a K where
+locking is already established.
 
 Labeling reuses the exact, clustering-free lobe-locking label from
 attractor_id.py / lorenz_fine_coupling_sweep.py: sign(time-mean X) per node.
@@ -30,7 +40,8 @@ drops into the same batched-IC pattern as the basin sweeps.
 Run:
     python3 -m pythongpu.pipeline.perturbation_sensitivity --smoke
     python3 -m pythongpu.pipeline.perturbation_sensitivity \
-        --dti-path data/DTI-og.mat --n-points 5 --n-directions 8
+        --compare-boundary-interior --boundary-coupling 0.5 --couplings 0.5 \
+        --slice-grid-n 96 --dti-path data/DTI-og.mat
 """
 
 from __future__ import annotations
@@ -226,7 +237,14 @@ def main(argv=None) -> int:
     ap.add_argument("--base-ic-mode", default="random",
                     choices=["random", "boundary", "interior"],
                     help="'boundary'/'interior' locate points via the clustering-free "
-                         "lobe-sign field at --boundary-coupling (see build_sign_slice).")
+                         "lobe-sign field at --boundary-coupling (see build_sign_slice). "
+                         "Ignored if --compare-boundary-interior is set.")
+    ap.add_argument("--compare-boundary-interior", action="store_true",
+                    help="the fixed experiment: sample BOTH boundary and interior ICs "
+                         "from the same reference slice and test both at the same "
+                         "--couplings, producing p_flip_boundary/p_flip_interior side "
+                         "by side. Avoids the invalid-control problem of comparing "
+                         "across couplings (see module docstring).")
     ap.add_argument("--boundary-coupling", type=float, default=0.5,
                     help="coupling used to locate boundary/interior ICs (default: the "
                          "measured riddled regime, K=0.5).")
@@ -252,19 +270,113 @@ def main(argv=None) -> int:
     n_points, n_directions, n_delta = args.n_points, args.n_directions, args.n_delta
     slice_grid_n = args.slice_grid_n
     base_ic_mode = args.base_ic_mode
+    compare = args.compare_boundary_interior
     if args.smoke:
         t_transient, tmax = 5.0, 10.0
         n_points, n_directions, n_delta = 2, 2, 4
         slice_grid_n = 16
-        if base_ic_mode in ("boundary", "interior"):
+        if compare or base_ic_mode in ("boundary", "interior"):
             print("[perturbation_sensitivity] --smoke: integration is too short to "
-                 "form a real lobe-sign boundary; forcing --base-ic-mode random.")
-            base_ic_mode = "random"
+                 "form a real lobe-sign boundary. Proceeding anyway so the sampling/"
+                 "masking/serialization LOGIC gets exercised end-to-end; the boundary "
+                 "vs interior split at this scale is not a scientific result.")
 
     p_base = LorenzParams(t_transient=t_transient, tmax=tmax, n_osc=N,
                           slice_node_x=args.node_x, slice_node_y=args.node_y)
     deltas = np.geomspace(args.delta_min, args.delta_max, n_delta)
 
+    from pathlib import Path
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    # Native-dtype config fields (no dict, no object dtype, no pickle) so the
+    # npz loads on any numpy version -- a dict value forces np.savez through
+    # allow_pickle, and a pickle written by one numpy major version is not
+    # guaranteed loadable by another (hit exactly this: numpy>=2 on ACRES vs
+    # 1.24 here raised "No module named 'numpy._core'" on the config field
+    # alone; the plain-dtype arrays loaded fine even then).
+    cfg_kwargs = dict(
+        cfg_dti_path=np.array(args.dti_path),
+        cfg_t_transient=np.float64(t_transient),
+        cfg_tmax=np.float64(tmax),
+        cfg_grid_lo=np.float64(args.grid_lo),
+        cfg_grid_hi=np.float64(args.grid_hi),
+        cfg_seed=np.int64(args.seed),
+        cfg_boundary_coupling=np.float64(args.boundary_coupling),
+        cfg_node_x=np.int64(args.node_x),
+        cfg_node_y=np.int64(args.node_y),
+        cfg_slice_grid_n=np.int64(slice_grid_n),
+    )
+
+    if compare:
+        print(f"[perturbation_sensitivity] --compare-boundary-interior: locating both "
+             f"pools from the lobe-sign field at K={args.boundary_coupling:.3f} "
+             f"(nodes {args.node_x},{args.node_y}, grid={slice_grid_n}) ...")
+        Xg, Yg, sign_labels, boundary = build_sign_slice(
+            args.boundary_coupling, args.node_x, args.node_y, slice_grid_n,
+            args.grid_lo, args.grid_hi, p_base, L_gpu, device)
+        n_boundary_px = int(boundary.sum())
+        print(f"    {n_boundary_px}/{boundary.size} boundary pixels "
+             f"({100*n_boundary_px/boundary.size:.1f}%), "
+             f"{boundary.size - n_boundary_px} interior pixels")
+
+        # Verify the mask actually partitions the grid the way sample_base_ics_from_slice
+        # will read it: boundary + interior must cover every pixel exactly once.
+        interior_mask = ~boundary
+        assert (boundary | interior_mask).all() and not (boundary & interior_mask).any(), \
+            "boundary/interior masks must partition the slice with no overlap or gap"
+
+        boundary_ics = sample_base_ics_from_slice(
+            "boundary", n_points, N, rng, args.node_x, args.node_y, Xg, Yg, boundary)
+        interior_ics = sample_base_ics_from_slice(
+            "interior", n_points, N, rng, args.node_x, args.node_y, Xg, Yg, boundary)
+        print(f"    sampled {boundary_ics.shape[0]} boundary ICs, "
+             f"{interior_ics.shape[0]} interior ICs")
+
+        results_boundary: list[SweepResult] = []
+        results_interior: list[SweepResult] = []
+        for coupling in args.couplings:
+            print(f"[perturbation_sensitivity] K={coupling:.3f}  boundary ...")
+            rb = run_coupling(coupling, boundary_ics, deltas, n_directions, p_base,
+                              L_gpu, device, rng)
+            results_boundary.append(rb)
+            for d, pf in zip(rb.deltas, rb.p_flip):
+                print(f"    delta={d:.3e}  P_flip(boundary)={pf:.3f}")
+
+            print(f"[perturbation_sensitivity] K={coupling:.3f}  interior ...")
+            ri = run_coupling(coupling, interior_ics, deltas, n_directions, p_base,
+                              L_gpu, device, rng)
+            results_interior.append(ri)
+            for d, pf in zip(ri.deltas, ri.p_flip):
+                print(f"    delta={d:.3e}  P_flip(interior)={pf:.3f}")
+
+        p_flip_boundary = np.stack([r.p_flip for r in results_boundary])   # (n_K, n_delta)
+        p_flip_interior = np.stack([r.p_flip for r in results_interior])   # (n_K, n_delta)
+        print(f"[perturbation_sensitivity] p_flip_boundary.shape={p_flip_boundary.shape}  "
+             f"p_flip_interior.shape={p_flip_interior.shape}")
+
+        out_path = outdir / "perturbation_sensitivity_boundary_interior.npz"
+        np.savez(
+            out_path,
+            couplings=np.array([r.coupling for r in results_boundary]),
+            deltas=deltas,
+            p_flip_boundary=p_flip_boundary,
+            p_flip_interior=p_flip_interior,
+            flip_frac_boundary=np.stack([r.flip_frac for r in results_boundary]),
+            flip_frac_interior=np.stack([r.flip_frac for r in results_interior]),
+            base_labels_boundary=np.stack([r.base_labels for r in results_boundary]),
+            base_labels_interior=np.stack([r.base_labels for r in results_interior]),
+            base_ics_boundary=boundary_ics,
+            base_ics_interior=interior_ics,
+            sign_labels=sign_labels,
+            boundary_mask=boundary,
+            n_points=n_points, n_directions=n_directions,
+            **cfg_kwargs,
+        )
+        print(f"[perturbation_sensitivity] wrote {out_path}")
+        return 0
+
+    # ── original single-pool path (unchanged behaviour, fixed serialization) ──
     if base_ic_mode in ("boundary", "interior"):
         print(f"[perturbation_sensitivity] locating '{base_ic_mode}' ICs from the "
              f"lobe-sign field at K={args.boundary_coupling:.3f} "
@@ -291,11 +403,7 @@ def main(argv=None) -> int:
         for d, pf in zip(res.deltas, res.p_flip):
             print(f"    delta={d:.3e}  P_flip={pf:.3f}")
 
-    from pathlib import Path
-    outdir = Path(args.outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
     out_path = outdir / "perturbation_sensitivity.npz"
-
     np.savez(
         out_path,
         couplings=np.array([r.coupling for r in results]),
@@ -305,10 +413,8 @@ def main(argv=None) -> int:
         base_labels=np.stack([r.base_labels for r in results]),# (n_K, n_points, N)
         base_ics=base_ics,                                     # (n_points, N, 3)
         n_points=n_points, n_directions=n_directions,
-        config=dict(dti_path=args.dti_path, t_transient=t_transient, tmax=tmax,
-                   grid_lo=args.grid_lo, grid_hi=args.grid_hi, seed=args.seed,
-                   base_ic_mode=base_ic_mode, boundary_coupling=args.boundary_coupling,
-                   node_x=args.node_x, node_y=args.node_y),
+        cfg_base_ic_mode=np.array(base_ic_mode),
+        **cfg_kwargs,
     )
     print(f"[perturbation_sensitivity] wrote {out_path}")
     return 0
