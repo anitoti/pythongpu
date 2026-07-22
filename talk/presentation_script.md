@@ -293,12 +293,13 @@ mingled basins. And I **quantified the distributed-computing claim** instead of 
 asserting it — serial versus array-job wall-clock at matched resolution, 1.34 to
 3.38 times faster, growing with grid size.
 
-Next up: settle the lag question with Dr. Fish, and null models plus CLV
-transversality, which are in progress. Running right now on the cluster: whether a
-tiny perturbation near a riddled point actually flips the lobe pattern — a direct
-test of the paper's own control-theoretic claim — whether the fractal dimension
-survives swapping the VPS's L2 distance for L1 or cosine, and higher-resolution and
-additional viewing planes.
+Next up: settle the lag question with Dr. Fish, beat the memory wall so the real
+VPS runs at production scale, check the Wada criterion on the exact labels, and
+null models plus CLV transversality, which are in progress. Running right now on
+the cluster: whether a tiny perturbation near a riddled point actually flips the
+lobe pattern — a direct test of the paper's own control-theoretic claim — whether
+the fractal dimension survives swapping the VPS's L2 distance for L1 or cosine, and
+higher-resolution and additional viewing planes.
 
 **The takeaway: a fast pipeline that can't fail isn't a measurement. The speedup was
 the easy part — checking that the fast thing still computed the *right* thing is where
