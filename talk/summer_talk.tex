@@ -1,16 +1,19 @@
 %=======================================================================
 %  Anna Totilca — Clarkson University REU 2026 — Advisor: Dr. Jeremie Fish
-%  HPC REU talk. Living deck: 2026-07-16 checkpoint -> RAPS 2026-07-29.
+%  HPC REU talk. 15-MINUTE RAPS-PRACTICE CUT. Full ~28-frame version is in
+%  summer_talk_full_backup.tex.
 %
 %  Build:  pdflatex summer_talk.tex   (run twice)
 %  Figures: put PNGs in ./figs/. Missing ones render as a labelled box.
 %
-%  GROUND RULE: a number appears here only if it came from a run I can point
-%  to. Deliberately ABSENT because they could not be reproduced from the repo:
-%  a Kuramoto D_f=1.8622, a "61 ms" VPS timing, the cross-model universality
-%  table, 750^2 grids, Titan Xp. Also absent: any MATLAB-vs-GPU wall-clock
-%  speedup — there is no MATLAB/Octave on our machines, so that benchmark is
-%  marked PENDING rather than invented.
+%  Cut for time (all preserved in the backup): the 4 CLV/null-model slides
+%  (in progress, placeholder figures), the standalone "beyond brains" slide,
+%  and the formal theorem/vocabulary slides merged into their neighbours.
+%
+%  GROUND RULE: a number appears here only if it came from a run I can point to.
+%  Absent because unreproducible: a Kuramoto D_f=1.8622, a "61 ms" VPS timing,
+%  the cross-model universality table, 750^2 grids, Titan Xp. No MATLAB-vs-GPU
+%  wall-clock speedup — no MATLAB on our machines, so it is PENDING, not invented.
 %=======================================================================
 \documentclass[aspectratio=169, 9pt]{beamer}
 
@@ -130,152 +133,115 @@
 }
 \newcommand{\pending}[1]{{\color{Rust}\footnotesize$\blacktriangleright$ \textit{Pending:} #1}}
 
-\title{Porting a Brain-Network Simulation to the GPU}
+\title{Rapidly Examining Fractal Basin Structure on the GPU}
 \subtitle{What the speedup bought --- and what it hid}
 \author{Anna Totilca \\ {\footnotesize Advisor: Dr.\ Jeremie Fish $\cdot$ Clarkson University REU 2026}}
 \date{Summer 2026 $\cdot$ Potsdam, NY}
 
 \begin{document}
 
-% ═════════════════════════════════════════════════════════ 1
+% ═════════════════════════════════════════════════════════ 1  TITLE
 \begin{frame}[plain]\titlepage\end{frame}
-\note{I'm Anna. My project was an HPC project: take the MATLAB behind a published
-paper and make it run on a GPU. I'll tell you what the science is, what I built,
-how fast it got — and then the two things I found by checking my own work that
-matter more than the speedup. ~30 s.}
+\note{I'm Anna. HPC project: take the MATLAB behind a published paper and make it
+rapidly scan basin structure on a GPU. I'll tell you the science, what I built, how
+fast it got — then the two things I found checking my own work that matter more than
+the speedup. ~20 s.}
 
-% ═════════════════════════════════════════════════════════ 2
+% ═════════════════════════════════════════════════════════ 2  THE SCIENCE
 \begin{frame}{The Science: Stability and Nimbleness at Once}
   \GeoPanels
-  \vspace{0.25cm}
-  Your brain holds a thought steadily --- and drops it the instant something
-  matters. Those demands fight each other.
-  \vspace{0.3cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
-    \column{0.47\textwidth}
-      \begin{block}{Too stable}
-        Can't leave without a big push. Robust, but you'd never notice the fire alarm.
-      \end{block}
-    \column{0.47\textwidth}
-      \begin{block}{Too unstable}
-        Noise alone destroys it. Responsive, but you couldn't hold a thought.
-      \end{block}
-  \end{columns}
-  \vspace{0.3cm}
-  The brain does both, in milliseconds, with \textbf{no central controller}. So
-  the resolution must be built into the \emph{geometry} of the system.
-  \vfill
-  {\footnotesize\color{Rust}\textit{``Small changes in current state caused by environmental
-  stimuli would be enough to switch between distinct stable brain states.''}\\
-  \hfill --- Bollt, Fish, Kumar, Roque dos Santos \& Laurienti,
-  \textit{Fractal Basins as a Mechanism for the Nimble Brain} (arXiv:2311.00061)}
-\end{frame}
-\note{Hook: stability and sensitivity are opposites and the brain refuses to choose.
-No homunculus flips the switch. Name the paper here — it's my advisor's, and my
-whole project is its code. ~1 min.}
+    \column{0.53\textwidth}
+      Your brain holds a thought steadily --- and drops it the instant something
+      matters. Those demands fight.
+      \medskip
 
-% ═════════════════════════════════════════════════════════ 3
-\begin{frame}{The Proposed Answer, in One Picture}
-  \GeoPanels
-  \vspace{0.2cm}
-  \begin{columns}[T]
-    \column{0.52\textwidth}
-      \vspace{0.2cm}
-      A marble on a landscape of valleys. Each \textbf{valley} is a brain state.
+      Picture a marble on a landscape of valleys. Each \textbf{valley} is a brain
+      state.
       \medskip
 
       \textbf{Smooth ridgelines} $\Rightarrow$ you need a big shove to switch.
-      \medskip
+      \smallskip
 
-      \textbf{Infinitely crinkly --- fractal --- ridgelines} $\Rightarrow$ almost
+      \textbf{Fractal --- infinitely crinkly --- ridgelines} $\Rightarrow$ almost
       wherever you stand, an edge is a hair away. A whisper moves you.
       \medskip
 
-      {\color{Rust}\textbf{Crinkliness is nimbleness.}}
+      {\color{Rust}\textbf{Crinkliness is nimbleness.}} No central controller flips
+      the switch --- the resolution is built into the \emph{geometry}.
     \column{0.44\textwidth}
       \centering
       \fig{basin_cartoon.png}{Smooth boundary: hard to switch.
       Fractal boundary: always poised at an edge.}
   \end{columns}
+  \vfill
+  {\scriptsize\color{Rust}\textit{``Small changes in current state \dots\ would be
+  enough to switch between distinct stable brain states.''}\ ---
+  Bollt, Fish, Kumar, Roque dos Santos \& Laurienti,
+  \textit{Fractal Basins as a Mechanism for the Nimble Brain} (arXiv:2311.00061)}
 \end{frame}
-\note{The one image they must leave with. Draw the ridgeline in the air. Everything
-technical after this is: how do you measure crinkliness, and how do you know you
-measured it and not an illusion. ~1 min.}
+\note{Hook + the one picture they must leave with. Stability and sensitivity are
+opposites and the brain refuses to choose. Name the paper — it's my advisor's, and
+my whole project is its code. Draw the ridgeline in the air. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 4
-\begin{frame}{Why It Matters Beyond Brains}
+% ═════════════════════════════════════════════════════════ 3  SYSTEM + THE PLANE
+\begin{frame}{The System --- and the ``Plane'' We View It From}
   \GeoPanels
-  \vspace{0.25cm}
-  The same geometry governs any coupled-oscillator system that must be reliable
-  \emph{and} switchable:
-  \vspace{0.3cm}
-  \begin{columns}[T]
-    \column{0.31\textwidth}
-      \begin{block}{Brain dynamics}
-        Rapid task switching --- and pathological \emph{failures} to switch, as when
-        a network locks into one state.
-      \end{block}
-    \column{0.31\textwidth}
-      \begin{block}{Power grids}
-        Generators must stay phase-locked. Which disturbance tips the grid out of
-        sync is a basin-boundary question.
-      \end{block}
-    \column{0.31\textwidth}
-      \begin{block}{Limits of prediction}
-        Fractal boundaries mean more precision buys almost \emph{no} predictive
-        power. A hard obstruction, not an engineering gap.
-      \end{block}
-  \end{columns}
-  \vspace{0.3cm}
-  \centering
-  The mathematics doesn't know it's in a skull.
-\end{frame}
-\note{For the non-neuro people. The predictability point is the deep one. ~45 s.}
-
-% ═════════════════════════════════════════════════════════ 5
-\begin{frame}{Vocabulary}
-  \GeoPanels
-  \vspace{0.2cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.55\textwidth}
-      \begin{block}{Attractor {\normalfont(the valley)}}
-        Compact set $A$, invariant under the flow ($\varphi_t(A)=A$), with an open
-        neighbourhood $U$ from which every trajectory converges to $A$; and
-        \emph{minimal}.
-      \end{block}
-      \begin{block}{Basin {\normalfont(where to drop the marble)}}
-        \[ \mathcal{B}(A)=\{\mathbf{x}_0 : \omega(\mathbf{x}_0)\subseteq A\} \]
-        Colour a grid of initial conditions by which attractor they reach $\Rightarrow$
-        a \textbf{basin map}.
-      \end{block}
+      Each of $N=83$ brain regions is a chaotic \textbf{Lorenz} oscillator; regions
+      are wired by a real human \textbf{DTI} scan. With Laplacian
+      $L=\mathrm{diag}(A\mathbf{1})-A$,
+      \[ \boxed{\;\dot{\mathbf{x}}_i=f(\mathbf{x}_i)-K\displaystyle\sum_j L_{ij}H\mathbf{x}_j\;} \]
+      \footnotesize
+      $H=e_1e_1^{\!\top}$ couples $x$-components; $K$ is the coupling --- the one knob.
+      \smallskip
+
+      \normalsize
+      The state space is $83\times3=\textbf{249}$ dimensions. You can't see a
+      249-D basin, so \textbf{my project's task} is to pick a 2-D
+      \textbf{plane of initial conditions}, sweep a grid, integrate each point, and
+      colour by outcome. That coloured grid \emph{is} the basin map --- the ``view
+      from a plane.''
     \column{0.42\textwidth}
       \centering
-      \fig{lorenz_attractor.png}{One Lorenz attractor, two wings. Remember
-      $C^{\pm}$ --- they return on slide 16.}
-      \begin{block}{\alert{The fact that drives this talk}}
+      \fig{dti_network.png}{83 regions, 850 edges, density 0.25, diameter 4.}
+      \begin{block}{Why the Laplacian}
         \footnotesize
-        Fix the parameters and the system \emph{has} some definite number of
-        attractors --- a property of the equations. We are \textbf{estimating an
-        integer that is already out there}, not choosing it.
+        $L\mathbf{1}=\mathbf{0}$, so full synchrony is \emph{always} an exact
+        solution. The question is whether anything \emph{else} coexists ---
+        i.e.\ whether the basin structure is rich.
       \end{block}
   \end{columns}
 \end{frame}
-\note{Definitions, then translate: valley / which starting points roll there /
-colored picture. The right box is the seed of the whole second half. ~1 min.}
+\note{Ground the project scope: high-dim basin, choose a plane, colour it. The
+Laplacian point earns 15 s — row sums zero => synchrony always solves it, so ``does
+anything else survive?'' is THE question. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 6
+% ═════════════════════════════════════════════════════════ 4  MEASURE + LANDMINE
 \begin{frame}{Measuring Crinkliness --- and an Ambiguity to Remember}
   \GeoPanels
-  \vspace{0.2cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.52\textwidth}
       \textbf{Box-counting dimension.} Cover the boundary with boxes of side
-      $\varepsilon$; $N(\varepsilon)$ = boxes touched. If
-      $N(\varepsilon)\sim\varepsilon^{-D}$,
-      \[ D_0=\lim_{\varepsilon\to0}\frac{\log N(\varepsilon)}{\log(1/\varepsilon)} \]
-      Smooth curve $\Rightarrow D=1$. Area-filling $\Rightarrow D=2$. Fractal in between.
+      $\varepsilon$; if $N(\varepsilon)\sim\varepsilon^{-D}$, then
+      $D_0=\lim \log N(\varepsilon)/\log(1/\varepsilon)$.
+      Smooth $\Rightarrow D=1$. Area-filling $\Rightarrow D=2$. Fractal in between.
+      \medskip
+
+      By Grebogi--McDonald--Ott--Yorke (1983), $D=d-\alpha$ ($d=2$ here). As
+      $\alpha\to0$ the boundary fills space and \textbf{extra precision buys almost
+      no prediction} --- a hard limit, not an engineering gap.
+      \medskip
+
+      {\footnotesize Fix the parameters and the system \emph{has} some definite
+      number of attractors. We are \textbf{estimating an integer already out
+      there}, not choosing it.}
     \column{0.44\textwidth}
-      \begin{block}{\alert{Hold onto this}}
+      \begin{block}{\alert{Hold onto this --- it detonates on slide 9}}
         $D\to2$ has \textbf{two} explanations:
         \smallskip
         \begin{enumerate}
@@ -285,170 +251,73 @@ colored picture. The right box is the seed of the whole second half. ~1 min.}
         \end{enumerate}
         \smallskip
         Both give $D\approx2$ with a beautiful fit. \textbf{$D$ alone cannot tell
-        them apart.} It detonates on slide 14.
+        them apart.}
       \end{block}
   \end{columns}
 \end{frame}
-\note{Plant the landmine and SAY you're planting it. This is the single most
-important setup line in the talk. ~1 min.}
+\note{Plant the landmine and SAY you're planting it. Single most important setup
+line in the talk. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 7
-\begin{frame}{The Theorems We Lean On}
+% ═════════════════════════════════════════════════════════ 5  MY PROJECT / THE PORT
+\begin{frame}[fragile]{My Project: Rapidly Scan the Plane --- Port the VPS to the GPU}
   \GeoPanels
-  \vspace{0.15cm}
-  \begin{block}{Uncertainty exponent \hfill {\normalfont Grebogi, McDonald, Ott \& Yorke (1983)}}
-    Perturb a random initial condition by $\varepsilon$; let $f(\varepsilon)$ be the
-    fraction whose final state changes. Then $f(\varepsilon)\sim\varepsilon^{\alpha}$ and
-    \[ \boxed{\;D = d - \alpha\;}\qquad(d=2\ \text{for our slice}) \]
-    \footnotesize
-    $10\times$ more precision cuts your error by only $10^{\alpha}$. As $\alpha\to0$
-    the boundary fills space and extra precision buys \emph{nothing}.
-  \end{block}
-  \vspace{0.05cm}
-  \begin{block}{Basin entropy \hfill {\normalfont Daza, Wagemakers, Georgeot, Gu\'ery-Odelin \& Sanju\'an (2016)}}
-    Cover with $\varepsilon$-boxes; in box $i$ with basin frequencies $p_{i,j}$, let
-    $S_i=-\sum_j p_{i,j}\ln p_{i,j}$; average over \emph{boundary} boxes $\to S_{bb}$.
-    \[ \boxed{\;S_{bb} > \ln 2 \;\Longrightarrow\; \text{fractal boundary}\;} \]
-    \footnotesize A \emph{sufficient condition} --- a theorem, not a slope fit.
-  \end{block}
-\end{frame}
-\note{Two results doing real work. GMOY: alpha near 0 => D near 2 => prediction
-collapses. Daza: a theorem beats a line fit. Say that out loud. ~1.5 min.}
-
-% ═════════════════════════════════════════════════════════ 8
-\begin{frame}{The System}
-  \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
-    \column{0.56\textwidth}
-      Each of $N=83$ brain regions is a chaotic \textbf{Lorenz} oscillator,
-      \[ \dot X=\sigma(Y-X),\quad \dot Y=X(\rho-Z)-Y,\quad \dot Z=XY-\beta Z \]
-      with $\sigma=10,\ \rho=28,\ \beta=\tfrac83$. Regions are wired by a real human
-      \textbf{DTI} scan; from its adjacency $A$ build $L=\mathrm{diag}(A\mathbf{1})-A$:
-      \[ \boxed{\;\dot{\mathbf{x}}_i=f(\mathbf{x}_i)-K\textstyle\sum_j L_{ij}H\mathbf{x}_j\;} \]
-      \footnotesize
-      $H=e_1e_1^{\!\top}$ couples $x$-components; $K$ is the coupling --- the one knob.
-    \column{0.40\textwidth}
-      \centering
-      \fig{dti_network.png}{83 regions, 850 edges, density 0.25, diameter 4.
-      State space $83\times3=249$ dimensions.}
-      \begin{block}{Why the Laplacian}
-        \footnotesize
-        $L\mathbf{1}=\mathbf{0}$, so full synchrony is \emph{always} an exact
-        solution. The question is whether anything \emph{else} coexists.
-      \end{block}
-  \end{columns}
-\end{frame}
-\note{The Laplacian point earns 15 seconds: row sums zero => synchrony is always a
-solution. So "does anything else survive?" is THE question. ~1.5 min.}
-
-% ═════════════════════════════════════════════════════════ 9
-\begin{frame}{My Project: Port the Paper's MATLAB to the GPU}
-  \GeoPanels
-  \vspace{0.2cm}
-  \begin{columns}[T]
-    \column{0.52\textwidth}
+    \column{0.5\textwidth}
       \begin{block}{The bottleneck}
-        Resolving a fractal boundary needs a \emph{huge} grid of initial conditions
-        --- each one an independent simulation. Embarrassingly parallel. The
-        original MATLAB runs them one at a time.
+        \footnotesize
+        A fractal boundary needs a \emph{huge} grid of initial conditions --- each an
+        independent simulation. Embarrassingly parallel. The original MATLAB runs
+        them one at a time.
       \end{block}
       \begin{block}{The expensive kernel: the VPS}
         \footnotesize
         The \textbf{Vector Pattern State} labels each run by \emph{how every pair of
-        regions moves together}. For $N=83$ that is
-        \[ \binom{83}{2}=3403 \text{ pairs},\qquad \text{VPS}\in\mathbb{R}^{6806} \]
-        MATLAB computes it with a \texttt{for} loop over all 3403 pairs, calling
-        \texttt{xcorr} on each.
-      \end{block}
-    \column{0.44\textwidth}
-      \begin{block}{What the VPS actually is}
-        \footnotesize
-        For each pair $(i,j)$, from the cross-correlation:
+        regions moves together}: $\binom{83}{2}=3403$ pairs, VPS $\in\mathbb{R}^{6806}$.
+        Per pair, from the cross-correlation:
         \begin{itemize}\setlength\itemsep{1pt}
-          \item $\tau_{ij}$ = the \textbf{time lag} at the correlation peak
-                --- \emph{how far out of phase} they are
-          \item $L_{ij}$ = the norm of their difference \textbf{after aligning by
-                that lag} --- how different once shifted
+          \item $\tau_{ij}$ = \textbf{time lag} at the peak (how out of phase);
+          \item $L_{ij}$ = difference norm \emph{after aligning by that lag}.
         \end{itemize}
-        \smallskip
-        The lag is the whole point: it detects \textbf{phase-lagged synchrony}, the
-        signature of a chimera.
-      \end{block}
-  \end{columns}
-\end{frame}
-\note{This is the HPC heart. Say plainly: the science was blocked by compute, my job
-was to unblock it. And define the VPS properly — tau is a TIME LAG. That matters in
-three slides. ~1.5 min.}
-
-% ═════════════════════════════════════════════════════════ 10
-\begin{frame}[fragile]{The Port: 3403 Serial Correlations $\to$ One Batched FFT}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-      \begin{block}{MATLAB}
-        \begin{lstlisting}
-for jk = 1:size(Vec,1)     % 3403 pairs, serial
-  [cx lagsx] = xcorr(x(:,i), x(:,j));
-  f = find(cx == max(cx));
-  Tau_x(jk) = lagsx(f);
-  ...
-end
-        \end{lstlisting}
-      \end{block}
-      \begin{block}{PyTorch, all pairs at once}
-        \begin{lstlisting}
-x_fft   = torch.fft.rfft(x, n=2T-1, dim=0)
-corr_fft= x_fft[:,i] * torch.conj(x_fft[:,j])
-corr    = torch.fft.irfft(corr_fft, n=2T-1)
-tau     = torch.argmax(corr, dim=0)   # all 3403
-        \end{lstlisting}
+        The lag detects \textbf{phase-lagged synchrony} --- the chimera signature.
+        MATLAB: a \texttt{for} loop over all 3403 pairs.
       \end{block}
     \column{0.47\textwidth}
-      \begin{block}{The HPC content}
+      \begin{block}{The port: 3403 serial correlations $\to$ one batched FFT}
+        \begin{lstlisting}
+x_fft = torch.fft.rfft(x, n=2T-1, dim=0)
+corr  = torch.fft.irfft(x_fft[:,i]*conj(x_fft[:,j]))
+tau   = torch.argmax(corr, dim=0)   # all 3403
+        \end{lstlisting}
         \footnotesize
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \textbf{Wiener--Khinchin}: correlation becomes a product in Fourier
-                space, $\mathcal{O}(T^2)\!\to\!\mathcal{O}(T\log T)$
-          \item \textbf{Batching}: all 3403 pairs in one kernel --- the loop
-                disappears into a tensor axis
-          \item \textbf{Upper-triangular indexing}: only unique pairs stored
-          \item \textbf{Batched RK4}: all initial conditions integrated
-                simultaneously
-          \item \textbf{SLURM job arrays}: one coupling $K$ per GPU
+        \begin{itemize}\setlength\itemsep{1pt}
+          \item \textbf{Wiener--Khinchin}: $\mathcal{O}(T^2)\!\to\!\mathcal{O}(T\log T)$
+          \item \textbf{Batching}: the loop becomes a tensor axis
+          \item \textbf{Batched RK4}: all ICs on the plane at once
+          \item \textbf{SLURM arrays}: one coupling $K$ per GPU
         \end{itemize}
-      \end{block}
-      \begin{block}{Scale reached on ACRES}
-        \footnotesize
-        $361^2 = 130{,}321$ initial conditions per coupling, 6806 features each,
-        $\approx$1 GPU-hour per $K$, 20 couplings.
+        \smallskip
+        Scale on ACRES: $\mathbf{361^2=130{,}321}$ ICs per coupling, $\approx$1
+        GPU-hour per $K$.
       \end{block}
   \end{columns}
-  \vfill
-  \centering{\footnotesize Benchmarked against a \textbf{serial CPU reference}
-  (a line-by-line transcription of the MATLAB) --- same maths, same pair count.
-  No MATLAB licence required, and it isolates the algorithm rather than the language.}
 \end{frame}
-\note{The engineering slide. The serial reference is the honest comparator: it's
-the same algorithm, so we measure parallelisation, not MATLAB-vs-Python language
-overhead. ~1.5 min.}
+\note{The HPC heart. The science was blocked by compute; my job was to unblock it.
+Define the VPS properly — tau is a TIME LAG; that matters two slides on. ~1.5 min.}
 
-
-% ═════════════════════════════════════════════════════════ 10b
+% ═════════════════════════════════════════════════════════ 6  THE PORT WAS SLOW
 \begin{frame}[fragile]{The Port Was Slow --- and the FFT Wasn't Why}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.5\textwidth}
       \centering
       \fig{benchmark.png}{Left: runtime. Right: speedup over the serial
-      reference. The looped port never clears $7\times$; vectorised reaches
-      $375\times$.}
+      reference. Looped port never clears $7\times$; vectorised reaches $375\times$.}
       \begin{block}{Profiling found it}
         \begin{lstlisting}
 for lag_val in range(-T+1, T):   # 2T-1 = 19,999
-    mask = tau == lag_val        #   iterations at T=1e4
+    mask = tau == lag_val        #   at T=1e4
         \end{lstlisting}
         \footnotesize
         The FFT parallelised $\tau$ --- then a \textbf{Python loop over every
@@ -460,39 +329,41 @@ for lag_val in range(-T+1, T):   # 2T-1 = 19,999
         Each pair has its own lag, so build \textbf{per-pair aligned index grids}
         and gather once:
         \begin{lstlisting}
-ti, tj = t + shift_i, t + shift_j
-xa = x[ti, a_idx];  xb = x[tj, b_idx]
-L  = norm((xa - xb) * valid, dim=0)
+ti,tj = t+shift_i, t+shift_j
+xa,xb = x[ti,a_idx], x[tj,b_idx]
+L = norm((xa-xb)*valid, dim=0)
         \end{lstlisting}
       \end{block}
       \begin{block}{\alert{Result: $3\times \rightarrow 375\times$}}
         \footnotesize
-        A further $\sim$57$\times$ over my own first port --- and the looped
-        version was \textbf{slower than serial} at $T{=}128$ ($0.83\times$).
-        Verified against the reference to float32 precision
-        (max $|\Delta L| = 1.9\times10^{-6}$).
+        $\sim$57$\times$ over my own first port. The looped version was
+        \textbf{slower than serial} at $T{=}128$ ($0.83\times$). Verified against
+        the reference to float32 (max $|\Delta L| = 1.9\times10^{-6}$).
       \end{block}
   \end{columns}
+  \vfill
+  \centering{\scriptsize Comparator is a \textbf{serial CPU reference} (a line-by-line
+  MATLAB transcription) --- so this measures parallelisation, not language overhead.
+  \pending{measured MATLAB-vs-GPU wall-clock (no MATLAB licence on our machines).}}
 \end{frame}
-\note{THE HPC slide. The arc is the point: naive port 3x -> profile -> the
-bottleneck is a Python loop, not the maths -> vectorise -> 375x, verified correct.
-"The FFT was never the problem. The loop after it was." ~2 min.}
+\note{THE HPC slide. The arc IS the point: naive port 3x -> profile -> the
+bottleneck is a Python loop, not the maths -> vectorise -> 375x, verified. ``The FFT
+was never the problem. The loop after it was.'' ~2 min.}
 
-% ═════════════════════════════════════════════════════════ 11
+% ═════════════════════════════════════════════════════════ 7  DID I REPRODUCE IT?
 \begin{frame}[fragile]{Did I Actually Reproduce It? {\normalfont(I tested. No.)}}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.1cm}
   A port is only a port if the numbers match. I transcribed
-  \texttt{VectorPatternState.m} line-by-line into a reference implementation and
-  compared, on the paper's own test matrices:
-  \vspace{0.15cm}
+  \texttt{VectorPatternState.m} line-by-line and compared on the paper's own test
+  matrices:
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.46\textwidth}
       \centering
       \fig{alignment_bias.png}{Every pair lies above the diagonal.}
-      {\scriptsize $\tau$ matches on \texttt{Example\_A\_3}, differs on
-      \texttt{A\_1}/\texttt{A\_2} (tie-breaking). $L$ disagrees on
-      \emph{every} input.}
+      {\scriptsize $\tau$ matches on some inputs, differs on others (tie-breaking);
+      $L$ disagrees on \emph{every} input.}
     \column{0.50\textwidth}
       \begin{block}{The cause: an off-by-one --- in the \emph{original}}
         \begin{lstlisting}
@@ -505,37 +376,35 @@ norm( x(1:end-(lag-1), j) - x(lag:end, i) )
 x[lag:, i] - x[:-lag, j]
         \end{lstlisting}
         \footnotesize
-        At $\text{lag}=1$ MATLAB's slices are \textbf{both the full series --- no shift
-        at all}, despite a detected lag of~1.
+        At $\text{lag}=1$ MATLAB's slices are \textbf{both the full series --- no
+        shift at all}, despite a detected lag of 1.
       \end{block}
   \end{columns}
   \vfill
-  {\footnotesize\color{Rust}\textbf{Measured:} the under-shift mis-aligns every
-  pair, so it \textbf{inflates} $L$ --- $L_{\text{matlab}} \ge L_{\text{corrected}}$ on
-  \textbf{36/36} pairs, mean ratio \textbf{1.96}. \textbf{So which is right?} To
-  \emph{replicate} I must reproduce the original; to be \emph{correct} I must not.
-  My code now ships \textbf{both}, so it is a measurement rather than an argument.}
+  {\footnotesize\color{Rust}\textbf{Measured:} the under-shift \textbf{inflates}
+  $L$ --- $L_{\text{matlab}} \ge L_{\text{corrected}}$ on \textbf{36/36} pairs, mean
+  ratio \textbf{1.96}. To \emph{replicate} I must reproduce the original; to be
+  \emph{correct} I must not. My code ships \textbf{both} --- a measurement, not an
+  argument. \textbf{This needs a conversation, not a unilateral fix.}}
 \end{frame}
-\note{This is the most grown-up slide in the deck. I tested my own port against the
-source and it failed — and the discrepancy may be a bug in the published code. Do
-NOT editorialise beyond "this needs a conversation." ~2 min.}
+\note{The most grown-up slide. I tested my port against the source and it failed —
+and the discrepancy may be a bug in the published code. Do NOT editorialise beyond
+``this needs a conversation.'' ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 12
+% ═════════════════════════════════════════════════════════ 8  MEMORY WALL
 \begin{frame}{The Memory Wall --- and the Substitution It Forced}
   \GeoPanels
-  \vspace{0.2cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.5\textwidth}
       \begin{block}{The real constraint}
         The true VPS needs the \textbf{whole trajectory} $(T\times N)$ per initial
         condition to cross-correlate.
         \smallskip
-        At grid $64^2$, storing them is
-        \[ \approx \textbf{41 GB} \]
+        At grid $64^2$, storing them is $\approx \textbf{41 GB}$.
         \smallskip
         So the production sweep uses a \textbf{streaming} approximation
-        (Welford, single-pass, $\mathcal{O}(B\cdot C)$ memory) that never stores a
-        trajectory.
+        (Welford, single-pass) that never stores a trajectory.
       \end{block}
     \column{0.46\textwidth}
       \begin{block}{\alert{But the substitute isn't the VPS}}
@@ -553,103 +422,73 @@ NOT editorialise beyond "this needs a conversation." ~2 min.}
         synchrony --- the chimera signature the VPS exists to find.
       \end{block}
   \end{columns}
-  \vspace{0.2cm}
+  \vspace{0.15cm}
   \centering
   {\color{Rust}\textbf{Every result this summer came from the streaming path.}
   The memory wall silently changed the science.}
 \end{frame}
-\note{The real HPC lesson, and it's not "I made it fast." A resource constraint
-forced an approximation, and the approximation quietly stopped computing the
-quantity the paper defines. Nobody noticed for weeks — including me. ~2 min.}
+\note{The real HPC lesson, and it's not ``I made it fast.'' A resource constraint
+forced an approximation that quietly stopped computing the quantity the paper
+defines. Nobody noticed for weeks — including me. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 13
-\begin{frame}{What the Pipeline Reported --- and the Picture Behind It}
+% ═════════════════════════════════════════════════════════ 9  PIPELINE REPORTED + DETONATE
+\begin{frame}{What the Pipeline Reported --- and the Ambiguity Detonates}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.44\textwidth}
       \begin{block}{The headline}
-        Across the sweep $K\in[0.45,0.65]$:
-        \[ D_f\approx1.89\text{--}1.96,\qquad R^2>0.99 \]
-        so $\alpha=2-D_f\approx0.04$: near-total final-state sensitivity.
-        \textbf{Exactly the result the project wanted.}
+        \footnotesize
+        Across $K\in[0.45,0.65]$: $D_f\approx1.89$--$1.96$, $R^2>0.99$, so
+        $\alpha\approx0.04$. \textbf{Exactly the result the project wanted.}
       \end{block}
       \begin{block}{Two things that itched}
         \footnotesize
-        $D_f$ was \textbf{flat in $K$} --- real bifurcation structure should move.
-        And the automatic basin count said \textbf{6--8} while the silhouette
-        criterion said \textbf{2}.
+        $D_f$ was \textbf{flat in $K$} (a real bifurcation should move it). The
+        automatic basin count said \textbf{6--8}; silhouette said \textbf{2}. And
+        the map was pure static.
+      \end{block}
+      \begin{block}{\alert{Slide 4, returning}}
+        \footnotesize
+        We measured $D\to2$: interwoven boundary \emph{or} meaningless labelling.
+        \textbf{$k$-means always returns $k$ groups} --- hand it noise, it returns
+        $k$ confident basins.
       \end{block}
     \column{0.52\textwidth}
       \centering
-      \fig{basin_map_K065.png}{The basin map at $K=0.65$ --- the map
-      $D_f\approx1.96$ was computed from.}
-    \end{columns}
-\end{frame}
-\note{Show the number. Ten seconds of triumph. Then the figure, and say nothing for
-a beat: it's pure static, no connected regions at any scale. "A basin map with no
-connected regions is not a basin map." Hinge of the talk. ~2 min.}
-
-% ═════════════════════════════════════════════════════════ 14
-\begin{frame}{The Ambiguity Detonates}
-  \GeoPanels
-  \vspace{0.3cm}
-  \begin{block}{Slide 6, returning}
-    \centering
-    $D\to2$ means \emph{either} an intricately interwoven boundary
-    \emph{or} a meaningless labelling. \textbf{We measured $D\to2$.}
-  \end{block}
-  \vspace{0.25cm}
-  \begin{columns}[T]
-    \column{0.47\textwidth}
-      \begin{block}{Why I suspected the artifact}
-        \footnotesize
-        \textbf{$k$-means always returns $k$ groups.} Hand it structureless data and
-        it hands back $k$ confident, meaningless basins. If labels are noise, every
-        pixel is a boundary pixel, so $D_f\to2$ and $\alpha\to0$ --- \emph{exactly}
-        what we measured.
-        \smallskip
-        And the basin count came from the \textbf{elbow method}, which finds the
-        ``corner'' of a curve --- but never abstains when there is no corner.
-      \end{block}
-    \column{0.49\textwidth}
-      \begin{block}{So I tested it properly}
-        \footnotesize
-        Everything downstream of clustering inherits the disease. I needed an
-        observable that needs \textbf{no clustering at all}.
-        \smallskip
-        \textbf{Descriptor:} per-node long-time $\langle x\rangle$. Time averages, so
-        constant on an attractor.
-        \smallskip
-        \textbf{Test:} are two \emph{neighbouring} grid points as different as two
-        \emph{random} ones?
-      \end{block}
+      \fig{basin_map_K065.png}{Measured basin plane at $K=0.65$ ($96^2$ ICs over
+      nodes 73, 81), coloured by the full 83-node lobe pattern: \textbf{8312 distinct
+      patterns among 9216 ICs}. Pure static --- no connected regions at any scale.}
   \end{columns}
 \end{frame}
-\note{Pay off the landmine. The honest version: I spent days convinced it was an
-artifact. The test I built to prove that is what proved me wrong. ~1.5 min.}
+\note{Ten seconds of triumph on the number. Then the figure, and a beat of silence:
+it's static. ``A basin map with no connected regions is not a basin map.'' If labels
+are noise, every pixel is a boundary => D_f -> 2 => exactly what we saw. Hinge of the
+talk. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 15
+% ═════════════════════════════════════════════════════════ 10  VALIDATE THE RULER
 \begin{frame}{Validate the Ruler Before Trusting the Measurement}
   \GeoPanels
-  \vspace{0.15cm}
-  At $K=0$ the network is \textbf{uncoupled}: every node has one ergodic chaotic
-  attractor, so long-time averages \emph{must} converge to a common value. If my
-  metric can't see that, it's worthless.
-  \vspace{0.15cm}
+  \vspace{0.1cm}
+  I needed an observable that needs \textbf{no clustering}: per-node long-time
+  $\langle x\rangle$ (a time average, so constant on an attractor). Then check it on
+  a system whose answer I \emph{already know}. At $K=0$ the network is uncoupled ---
+  one ergodic attractor per node --- so long-time averages \emph{must} converge to a
+  common value.
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.52\textwidth}
       \centering
       \fig{convergence_control.png}{$K=0$ tracks $1/\sqrt{T}$ as ergodicity
       demands; $K=0.5$ is flat over $32\times$ more averaging.}
     \column{0.44\textwidth}
-      \begin{block}{Both alternatives excluded}
+      \begin{block}{Both innocent alternatives excluded}
         \footnotesize
         \begin{itemize}\setlength\itemsep{2pt}
           \item \textbf{Unconverged averages?} No --- $K=0$ converges under the
                 identical metric.
-          \item \textbf{Long transients?} No --- flat under
-                \textbf{320$\times$} more burn-in (20 $\to$ 6400).
+          \item \textbf{Long transients?} No --- flat under \textbf{320$\times$}
+                more burn-in (20 $\to$ 6400).
         \end{itemize}
         \smallskip
         Ergodicity forbids IC-dependent long-time averages on \emph{one} attractor.
@@ -657,24 +496,23 @@ artifact. The test I built to prove that is what proved me wrong. ~1.5 min.}
       \end{block}
   \end{columns}
 \end{frame}
-\note{The methodological spine of the whole talk: build the ruler, check the ruler
-on a system whose answer you already know, THEN measure. Every conclusion I got
-without doing this was wrong. ~2 min.}
+\note{The methodological spine: build the ruler, check it on a known answer, THEN
+measure. Every conclusion I got without doing this was wrong. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 16
+% ═════════════════════════════════════════════════════════ 11  THE MECHANISM
 \begin{frame}{The Mechanism: Coupling Locks Nodes onto Lobes}
   \GeoPanels
-  \vspace{0.15cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.5\textwidth}
       \begin{block}{The observable}
         \footnotesize
         A Lorenz attractor has two wings. Long-time $\langle X\rangle$ is
-        \textbf{0} if a trajectory visits both, and $\pm7.8$ if it stays
+        \textbf{0} if a trajectory visits both, $\pm7.8$ if it stays
         \textbf{locked} on one.
       \end{block}
       \centering
-      \fig{lobe_histogram.png}{Uncoupled: every node ergodic, $\langle X\rangle\to0$.
+      \fig{lobe_histogram.png}{Uncoupled: ergodic, $\langle X\rangle\to0$.
       Coupled: 97.8\% pinned to one wing at $\pm7$.}
     \column{0.46\textwidth}
       \begin{block}{\alert{So the basin label is exact}}
@@ -682,135 +520,23 @@ without doing this was wrong. ~2 min.}
         The network's attractor is a \textbf{pattern of $\pm$ lobes across 83 nodes}:
         \[ \boxed{\ \text{label} = \mathrm{sign}\langle X_i\rangle\ } \]
         83 bits. Discrete. \textbf{No clustering, no $k$, no elbow, no silhouette.}
-        \smallskip
         Up to $2^{83}\approx10^{25}$ candidate attractors.
       \end{block}
       \begin{block}{And they're permanent}
         \footnotesize
-        Same ICs, two \textbf{disjoint} time windows: \textbf{99.9\% of bits agree};
+        Same ICs, two \textbf{disjoint} time windows: \textbf{99.9\%} of bits agree;
         94.6\% of ICs reproduce their exact 83-bit pattern.
       \end{block}
   \end{columns}
 \end{frame}
 \note{This is the finding. Uncoupled = ergodic = one attractor. Coupled = locked =
-combinatorially many. And the label is a FACT, not an estimate — that's what kills
-every clustering problem in this talk. ~2 min.}
+combinatorially many. The label is a FACT, not an estimate — that's what kills every
+clustering problem in this talk. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 16b
-\begin{frame}{CLV diagnostics: Ginelli's algorithm (implementation)}
+% ═════════════════════════════════════════════════════════ 12  ONSET CURVE
+\begin{frame}{Where Does the Locking Switch On? {\normalfont(the RAPS figure)}}
   \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.55\textwidth}
-      \begin{block}{Algorithm overview}
-        \footnotesize
-        Ginelli's method recovers covariant Lyapunov vectors (CLVs) via a two-pass
-        integration:
-        \begin{enumerate}\setlength\itemsep{2pt}
-          \item Forward pass: integrate the nonlinear state and a set of tangent
-                vectors simultaneously (batched RK4). Every $q$ steps perform a QR
-                factorisation $T=QR$ to re-orthonormalise the tangents.
-          \item Store the upper-triangular $R_n$ factors (on-GPU, in \texttt{float16}
-                to save VRAM) and the orthonormal $Q_n$ bases (offloaded to CPU).
-          \item Backward pass: recurse $C_{n-1}=\text{solve}(R_n, C_n)$ with
-                column-wise normalisation; the CLVs at time $n$ are $V_n=Q_n C_n$.
-        \end{enumerate}
-      \end{block}
-      \begin{block}{Practical choices (this repo)}
-        \footnotesize
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item Batched RK4 kernel reuses the project's integrator and Jacobian API.
-          \item QR performed every \textbf{10} steps (configurable).
-          \item R matrices stored as \texttt{torch.float16} on GPU; Q as \texttt{numpy.float32} on CPU.
-          \item Backward linear solves cast R to \texttt{float32} for numerics then normalise columns.
-        \end{itemize}
-      \end{block}
-    \column{0.43\textwidth}
-      \centering
-      \fig{clv_pipeline.png}{Forward QR every 10 steps; store R\_n in half precision; backward solve to reconstruct CLVs.}
-  \end{columns}
-  \vfill
-  Implementation: CLVCalculator (see \texttt{\detokenize{pythongpu/pipeline/clv_diagnostics.py}}) implements these steps and provides CLV transversality diagnostics.
-\end{frame}
-
-\begin{frame}{CLV transversality and riddled basins}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.55\textwidth}
-      \begin{block}{Transversality angles}
-        \footnotesize
-        Given CLVs $v_i(t)$, compute pairwise angles $\theta_{ij}(t)=\arccos\big(|\langle v_i,v_j\rangle|\big)$.
-        Small angles (near $0$) indicate near-tangencies in tangent space and are a
-        precursor to basin riddling: loss of hyperbolicity and nearby trajectories
-        becoming indistinguishable along unstable directions.
-      \end{block}
-      \begin{block}{Diagnostics produced}
-        \footnotesize
-        The pipeline computes the time-series of the minimum angle among the
-        leading $K$ CLVs and writes it to \texttt{\detokenize{output/clv_angles_K{K}.npy}}.
-        Statistical summaries (fraction of times \(\min\theta<\epsilon\), median, and quantiles)
-        are used to detect transitions into riddled regimes.
-      \end{block}
-    \column{0.43\textwidth}
-      \centering
-      \fig{clv_angles_example.png}{Example min-angle time series; sustained drops toward 0 indicate tangencies and potential riddling.}
-    \end{columns}
-\end{frame}
-
-\begin{frame}{Parallel SLURM deployment and null-model comparison}
-  \GeoPanels
-  \vspace{0.12cm}
-  \begin{columns}[T]
-    \column{0.56\textwidth}
-      \begin{block}{ACRES deployment}
-        \footnotesize
-        The CLV pipeline is exposed as a console command \texttt{pythongpu-clv} and
-        wrapped in SLURM sbatch scripts for ACRES. Example scripts:
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \texttt{\detokenize{scripts/run_clv_sweep.sh}}: DTI connectome sweep (1 GPU, 12G, 6h).
-          \item \texttt{\detokenize{scripts/run_clv_null_sweep.sh}}: scale-free null-model sweep (same resources).
-        \end{itemize}
-        Each job runs a coupling sweep $K\in[0.05,0.20]$ and stores per-run CLV angle series
-        and summaries under \texttt{output/} for later analysis.
-      \end{block}
-      \begin{block}{Null-model rationale}
-        \footnotesize
-        To test whether riddling is a specific property of the DTI wiring or a
-        generic feature of dense networks, we compare the 83-node human connectome
-        against a Barab\'asi--Albert scale-free graph (\texttt{\detokenize{generate_ba_graph(n=83,m=6)}}),
-        chosen to approximate edge density. The null sweep re-runs the identical
-        CLV analysis on the BA topology.
-      \end{block}
-    \column{0.42\textwidth}
-      \centering
-      \fig{clv_sweep_layout.png}{Parallel jobs: one GPU per $K$, outputs collected under \texttt{output/}.}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Comparing DTI vs scale-free null model}
-  \GeoPanels
-  \vspace{0.12cm}
-  \begin{columns}[T]
-    \column{0.52\textwidth}
-      \begin{block}{What to compare}
-        \footnotesize
-        For each coupling $K$ we compare:
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item min-CLV-angle time-series and its statistics (median, quantiles, fraction below $\epsilon$)
-          \item timing of sustained angle collapses vs the locking onset (from basin counts)
-          \item whether rattling/tangencies are topology-dependent (DTI vs BA)
-        \end{itemize}
-      \end{block}
-    \column{0.44\textwidth}
-      \centering
-      \fig{clv_compare_placeholder.png}{Planned figure: min-angle statistics across $K$ for DTI and BA null model.}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Where Does the Locking Switch On?}
-  \GeoPanels
-  \vspace{0.1cm}
+  \vspace{0.05cm}
   \begin{columns}[T]
     \column{0.56\textwidth}
       \centering
@@ -822,25 +548,25 @@ every clustering problem in this talk. ~2 min.}
         anyone had swept. $\Lambda$ climbs from $0.026$ (ergodic) to $7.29$,
         against a single-wing value of $7.8$.
       \end{block}
-      \begin{block}{\alert{And it orders the regimes}}
+      \begin{block}{\alert{And it tells you which plane to render}}
         \footnotesize
-        The largest basin holds $0.1\%$ of ICs below onset (sign noise), peaks at
-        \textbf{9.3\% near $K\approx0.12$}, and falls to $0.4\%$ by $K=0.2$.
+        The largest basin holds $0.1\%$ of ICs below onset, peaks at \textbf{9.3\%
+        near $K\approx0.12$}, and falls to $0.4\%$ by $K=0.2$.
         \smallskip
-        The paper's coupling, \texttt{gel}$=0.5$, sits \textbf{deep in the riddled
-        regime} --- basins too finely intermingled to map. The only window where
-        they have appreciable size is $K\approx0.08$--$0.12$.
+        The paper's coupling \texttt{gel}$=0.5$ sits \textbf{deep in the riddled
+        regime} --- basins too finely intermingled to map. The only legible window
+        is $K\approx0.08$--$0.12$.
       \end{block}
   \end{columns}
 \end{frame}
-\note{This is the figure nobody else has. The paper works at one coupling; this is
-the bifurcation underneath it. And the punchline is practical: gel=0.5 is the WRONG
-place to try to map basins. ~1.5 min.}
+\note{The figure nobody else has. The paper works at one coupling; this is the
+bifurcation underneath it. Punchline is practical: gel=0.5 is the WRONG place to try
+to map basins. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 17
+% ═════════════════════════════════════════════════════════ 13  THE RESULT
 \begin{frame}{The Result: The Basins Really Are Mingled}
   \GeoPanels
-  \vspace{0.2cm}
+  \vspace{0.1cm}
   \begin{columns}[T]
     \column{0.5\textwidth}
       \begin{block}{Counting them exactly}
@@ -854,48 +580,43 @@ place to try to map basins. ~1.5 min.}
           \bottomrule
         \end{tabular}
         \par\smallskip
-        {\footnotesize Nearly every initial condition its own attractor. We are
-        \textbf{sampling-saturated}: the true count is $\ge$1010.
-        \smallskip
-        Mean Hamming distance between patterns: \textbf{41.5 of 83 bits} --- exactly
-        the distance between \emph{random} strings.}
+        {\footnotesize Nearly every IC its own attractor --- \textbf{sampling-saturated}
+        (true count $\ge$1010). Mean Hamming distance \textbf{41.5 of 83 bits} ---
+        exactly the distance between \emph{random} strings.}
       \end{block}
+      \centering
+      \fig{persistence.png}{The label is only as good as the locking: 50.2\%
+      coin flip at $K{=}0.01$ (control), 99.9\% at $K{=}0.5$.}
     \column{0.46\textwidth}
       \begin{block}{So $D_f\approx1.96$ was right}
         \footnotesize
         Boundaries among $\sim$1000+ interleaved basins \textbf{genuinely are}
-        space-filling. $\alpha\to0$ is real. The static map is what
-        \textbf{riddled} basins look like.
-        \smallskip
-        Every anomaly resolves: flat $D_f$ (locking persists), the failure of every
-        cluster-count method (the true count is astronomical, not 8).
+        space-filling. $\alpha\to0$ is real. The static map is what \textbf{riddled}
+        basins look like. Every anomaly resolves.
       \end{block}
       \begin{block}{This \emph{supports} the paper}
         \footnotesize
         Bollt--Fish report ``intricately \emph{mingled} basin boundaries'' at
-        \texttt{gel}$=0.5$ --- our $K=0.5$. \textbf{Confirmed, with a mechanism.}
+        \texttt{gel}$=0.5$ --- our $K=0.5$. \textbf{Confirmed, with a mechanism the
+        paper doesn't name.}
       \end{block}
-      \centering
-      \fig{persistence.png}{The label is only as good as the locking: a 50.2\%
-      coin flip at $K{=}0.01$ (control), 99.9\% at $K{=}0.5$.}
   \end{columns}
 \end{frame}
-\note{Land it. And be generous: this CONFIRMS my advisor's paper at his own
-parameter value, and adds the mechanism his paper doesn't name. Their k=8 is a
-coarse-graining for visualisation, not a claim of eight attractors — don't
-misrepresent it. ~2 min.}
+\note{Land it. Be generous: this CONFIRMS my advisor's paper at his own parameter and
+adds the mechanism. Their k=8 is a coarse-graining for visualisation, not a claim of
+eight attractors — don't misrepresent it. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 18
+% ═════════════════════════════════════════════════════════ 14  WHAT I GOT WRONG
 \begin{frame}{What I Got Wrong}
   \GeoPanels
-  \vspace{0.3cm}
+  \vspace{0.15cm}
   \begin{columns}[T]
     \column{0.52\textwidth}
       Hypotheses I proposed and then \textbf{killed with a control}:
       \begin{enumerate}\setlength\itemsep{4pt}
-        \item The synchronisation manifold is stable, so everything collapses to
-              sync. --- \textcolor{Rust}{No sync at \emph{any} $K$.}
-        \item The IC jitter is manufacturing the static. ---
+        \item Everything collapses to sync. ---
+              \textcolor{Rust}{No sync at \emph{any} $K$.}
+        \item IC jitter is manufacturing the static. ---
               \textcolor{Rust}{Zero jitter: identical result.}
         \item The whole $D_f\approx1.9$ is a clustering artifact. ---
               \textcolor{Rust}{It's real riddling.}
@@ -904,127 +625,63 @@ misrepresent it. ~2 min.}
       \end{enumerate}
     \column{0.44\textwidth}
       \begin{block}{The one that stings}
-        I put the ``$D\to2$ is ambiguous'' warning on \textbf{slide 6} --- and then
+        I put the ``$D\to2$ is ambiguous'' warning on \textbf{slide 4} --- then
         spent days failing to apply it to my own conclusion.
       \end{block}
       \begin{block}{Why it worked out anyway}
-        Every one of them died to a control against a system whose answer I already
-        knew. That's the only reason the real mechanism surfaced.
+        Every one died to a control against a system whose answer I already knew.
+        That's the only reason the real mechanism surfaced.
       \end{block}
   \end{columns}
   \vfill
   \centering{\color{Rust}\textbf{The most dangerous bug is the one that makes your result look better.}}
 \end{frame}
-\note{Do not skip this slide. It is the most valuable thing I learned and the most
-credible thing I can say. Four wrong hypotheses, each killed by a control. ~1.5 min.}
+\note{Do not skip this slide. Most valuable thing I learned and most credible thing I
+can say. Four wrong hypotheses, each killed by a control. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 19
-\begin{frame}{Deliverables}
+% ═════════════════════════════════════════════════════════ 15  SUMMARY + NEXT
+\begin{frame}{Summary --- and What's Next}
   \GeoPanels
-  \vspace{0.15cm}
-  \begin{block}{\texttt{pythongpu} --- \texttt{github.com/anitoti/pythongpu}}
-    \footnotesize
-    \begin{columns}[T]
-      \column{0.5\textwidth}
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \textbf{GPU port} of the paper's MATLAB: batched RK4, batched
-                FFT cross-correlation, SLURM job arrays for ACRES
-          \item \textbf{oscillators/} Lorenz, R\"ossler, Kuramoto, Hindmarsh--Rose,
-                Van der Pol, FitzHugh--Nagumo, Chua
-          \item \textbf{networks/} DTI connectome $+$ ER / Watts--Strogatz /
-                Barab\'asi--Albert null models
-        \end{itemize}
-      \column{0.5\textwidth}
-        \begin{itemize}\setlength\itemsep{2pt}
-          \item \textbf{diagnostics} \alert{(new)} structure gate, emergent
-                attractor count, radius-plateau test --- each validated on
-                known-answer data
-          \item \textbf{replication harness} \alert{(new)} GPU VPS vs a literal
-                MATLAB transcription on the paper's own test matrices
-          \item \texttt{pytest} suite
-        \end{itemize}
-    \end{columns}
-  \end{block}
   \vspace{0.1cm}
-  \centering{\footnotesize The pipeline now \textbf{argues back}: it refuses to report
-  a $D_f$ it cannot support.}
-\end{frame}
-\note{Infrastructure framing. The line that matters: it refuses to report numbers it
-can't support. That's the thing the next student inherits. ~45 s.}
-
-% ═════════════════════════════════════════════════════════ 20
-\begin{frame}{Next}
-  \GeoPanels
-  \vspace{0.15cm}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-      \begin{block}{Finish the port {\normalfont(the HPC thread)}}
-        \footnotesize
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item Resolve the $\text{lag}$ vs $\text{lag}{-}1$ alignment with
-                Dr.\ Fish --- replicate, or correct?
-          \item Vectorise the $L$ loop: it currently runs
-                \textbf{$2T{-}1 = 19{,}999$ Python iterations} at $T{=}10^4$,
-                undoing the FFT win
-          \item Beat the 41 GB wall (chunking / fp16) so the \emph{real} VPS runs
-                at $130$k ICs
-          \item \pending{measured MATLAB vs GPU benchmark}
-        \end{itemize}
-      \end{block}
-    \column{0.49\textwidth}
-      \begin{block}{Finish the science}
-        \footnotesize
-        \begin{itemize}\setlength\itemsep{1pt}
-          \item \textbf{Where does locking switch on?} 94.9\% locked already at
-                $K{=}0.2$ --- the transition is \textbf{below} it, in the window
-                nobody swept
-          \item \textbf{$S_{bb}>\ln2$} on the exact lobe labels --- a theorem, not
-                a slope fit
-          \item \textbf{Null models} (already wired): brain wiring, or any dense graph?
-          \item Other slices --- ours holds 81 of 83 nodes nearly fixed
-        \end{itemize}
-      \end{block}
-  \end{columns}
-\end{frame}
-\note{Two threads, both concrete. The lag question is a one-email decision. The
-locking onset is the RAPS figure. ~1 min.}
-
-% ═════════════════════════════════════════════════════════ 21
-\begin{frame}{Summary}
-  \GeoPanels
-  \vspace{0.2cm}
   \begin{columns}[T]
     \column{0.55\textwidth}
-      \begin{itemize}\setlength\itemsep{4pt}
-        \item[\textcolor{Olive}{$\checkmark$}] \textbf{Ported} the paper's MATLAB to the
-              GPU: 3403 serial correlations $\to$ one batched FFT; $130{,}321$
-              simulations at once on ACRES.
-        \item[\textcolor{Rust}{$\bullet$}] \textbf{Tested my own port} against the
-              source --- it \emph{doesn't} match, and the discrepancy may be an
-              off-by-one in the published code.
+      \begin{itemize}\setlength\itemsep{3pt}
+        \item[\textcolor{Olive}{$\checkmark$}] \textbf{Built the fast plane-scanner:}
+              3403 serial correlations $\to$ one batched FFT; $130{,}321$ simulations
+              at once on ACRES, $375\times$ over serial.
+        \item[\textcolor{Rust}{$\bullet$}] \textbf{Tested my own port} --- it doesn't
+              match the source; the discrepancy may be an off-by-one in the
+              \emph{published} code.
         \item[\textcolor{Rust}{$\bullet$}] Found the memory wall had forced a
               substitute that \textbf{silently stopped computing the VPS}.
-        \item[\textcolor{Olive}{$\checkmark$}] Built diagnostics validated on
-              known answers --- and used them to find the \textbf{mechanism}:
-              coupling locks nodes onto lobes, giving $\sim$1000+ permanent
-              attractors and genuinely mingled basins.
+        \item[\textcolor{Olive}{$\checkmark$}] Built diagnostics validated on known
+              answers $\to$ the \textbf{mechanism}: coupling locks nodes onto lobes,
+              giving $\sim$1000+ permanent attractors and genuinely mingled basins.
       \end{itemize}
+      \smallskip
+      \footnotesize\textbf{Next:} resolve the lag question with Dr.\ Fish; beat the
+      41 GB wall so the \emph{real} VPS runs at 130k ICs; $S_{bb}>\ln2$ on the exact
+      labels; null models (DTI vs scale-free) and CLV transversality \emph{(in
+      progress)}; other viewing planes.
     \column{0.41\textwidth}
       \begin{block}{Takeaway}
         A fast pipeline that \textbf{cannot fail} isn't a measurement.
         \smallskip
         The speedup was the easy part. Checking that the fast thing still computed
-        the \emph{right} thing is where the summer actually went --- and where both
-        real findings came from.
+        the \emph{right} thing is where the summer went --- and where both real
+        findings came from.
       \end{block}
+      \smallskip
+      {\scriptsize The pipeline now \textbf{argues back}: it refuses to report a
+      $D_f$ it cannot support. \texttt{github.com/anitoti/pythongpu}}
   \end{columns}
   \vfill
   \centering{\small\emph{``The most dangerous bug is the one that makes your result look better.''}}
 \end{frame}
 \note{One breath: ported it, tested it, found it didn't match, found the wall, built
-the referees, found the mechanism. End on the line. Then questions. ~1 min.}
+the referees, found the mechanism. End on the line, then questions. ~1.5 min.}
 
-% ═════════════════════════════════════════════════════════ 22
+% ═════════════════════════════════════════════════════════ 16  THANKS
 \begin{frame}[plain]
   \begin{tikzpicture}[overlay, remember picture]
     \fill[DarkBrown] (current page.south west) rectangle (current page.north east);
