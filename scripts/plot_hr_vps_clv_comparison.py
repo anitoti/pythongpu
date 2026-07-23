@@ -48,14 +48,26 @@ def load_surrogate_df(k: str) -> float:
     return float(np.asarray(d["fractal_dim"]).ravel()[0])
 
 
+def clv_summary_path(tag: str) -> Path | None:
+    """hr_clv_cli.py nests an extra coupling-named subdir (from its own
+    f"{coupling:.2f}" formatting, which rounds unpredictably -- e.g. 0.475
+    lands in "c0_47", 0.525 in "c0_53") inside whatever --outdir
+    run_hr_followup.sh passes it. Glob for it instead of hardcoding the
+    rounded name."""
+    outer = CLV_OUT / f"clv_c{tag.replace('.', '_')}"
+    matches = list(outer.glob("*/clv_topology_summary.json"))
+    return matches[0] if matches else None
+
+
 def load_clv(tag: str) -> dict:
-    return json.loads((CLV_OUT / f"clv_c{tag.replace('.', '_')}" / "clv_topology_summary.json").read_text())
+    path = clv_summary_path(tag)
+    return json.loads(path.read_text())
 
 
 def main() -> int:
     missing = ([DERIV / f"hr_basins_n73_n81_K{k}.npz" for k in COUPLINGS if not (DERIV / f"hr_basins_n73_n81_K{k}.npz").exists()]
-              + [CLV_OUT / f"clv_c{t.replace('.', '_')}" / "clv_topology_summary.json" for t in CLV_TAGS
-                 if not (CLV_OUT / f"clv_c{t.replace('.', '_')}" / "clv_topology_summary.json").exists()])
+              + [CLV_OUT / f"clv_c{t.replace('.', '_')}" for t in CLV_TAGS
+                 if clv_summary_path(t) is None])
     if missing:
         print("HR VPS-vs-CLV comparison data not ready yet -- missing:")
         for m in missing:
