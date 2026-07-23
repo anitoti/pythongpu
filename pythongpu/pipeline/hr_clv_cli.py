@@ -11,6 +11,17 @@ from pythongpu.networks.static_adjacency import load_dti_laplacian
 from pythongpu.networks.random_graphs import generate_ba_graph
 
 
+def load_seeded_graph_laplacian(npz_path: str, device: torch.device):
+    """Load one graph produced by scripts/seeded_random_graph_sweep.py and
+    build its Laplacian the same way load_dti_laplacian does (L = diag(sum(A,2)) - A),
+    so the seeded BA/GNM/WS nulls drop into the exact same CLV pipeline as
+    the DTI connectome and the ad hoc --null-model BA graph."""
+    d = np.load(npz_path)
+    A = torch.as_tensor(d["adjacency"], dtype=torch.float32, device=device)
+    L = torch.diag(A.sum(dim=1)) - A
+    return L, A.shape[0]
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description='Run CLV diagnostics on the Hindmarsh-Rose DTI network '
                                                   '(mirrors clv_cli.py, HR vector field instead of Lorenz)')
@@ -24,13 +35,22 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument('--coupling', type=float, default=0.1, help='network coupling strength (passed to HindmarshRoseNetwork)')
     parser.add_argument('--dt', type=float, default=0.05, help='integration step -- HindmarshRoseParams default (see hr_sweep.py)')
     parser.add_argument('--null-model', action='store_true', help='use a BA scale-free null model instead of the DTI connectome')
+    parser.add_argument('--random-graph-file', type=str, default=None,
+                        help='path to a seeded null-model graph produced by '
+                             'scripts/seeded_random_graph_sweep.py (e.g. '
+                             'data/derivatives/random_graph_seeds/ba/seed003.npz) -- '
+                             'takes priority over --null-model/--mat if given.')
     args = parser.parse_args(argv)
 
     device = torch.device(args.device) if args.device else (torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'))
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    if args.null_model:
+    if args.random_graph_file:
+        L, N = load_seeded_graph_laplacian(args.random_graph_file, device=device)
+        stem = Path(args.random_graph_file).parent.name + "_" + Path(args.random_graph_file).stem
+        label = f'seeded null ({stem})'
+    elif args.null_model:
         print('Using BA scale-free null model (n=83, m=6)')
         L = generate_ba_graph(n=83, m=6, device=device, plot=False)
         N = L.shape[0]
