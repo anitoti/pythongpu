@@ -6,7 +6,7 @@
 #SBATCH --partition=general
 # No --qos: same reasoning as submit_perturbation_sweep.sh -- no named QOS on
 # this account, general's MaxTime is enforced by the partition directly.
-#SBATCH --time=02:00:00
+#SBATCH --time=08:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
@@ -38,10 +38,18 @@
 # Sec I.6b).
 #
 # GRID_N=256 matches the largest resolution already timed in
-# submit_benchmark_scaling.sh (serial integration ~635s there), so the
-# --time budget below is grounded in a real measurement, not a guess --
-# clustering/box-counting adds some overhead on top, hence the 2h margin
-# instead of just the ~11 min the integration itself took.
+# submit_benchmark_scaling.sh (serial integration ~635s there) -- BUT that
+# benchmark (benchmark_scaling.py's time_integration()) only times raw
+# rk4_step_batched calls, NOT the VPS Welford accumulation (diff/dx_abs/
+# L_val/running-mean updates across all C(83,2)=3403 node pairs) that
+# run_sweep_streaming ALSO does every step in the real production job --
+# arrays ~41x larger per-element-count than the state itself. The 2h
+# budget derived from that benchmark was consequently wrong: the first
+# --exclusive, uncontended retry (job 4556176) measured a REAL rate of
+# 1.98s/it (not 0.635s/10000 steps => 0.0635s/it), timed out at 33% right
+# on schedule for a ~5.5h total. --time=08:00:00 is grounded in that
+# measured 1.98s/it rate (~5.5h) plus real margin, not the benchmark's
+# rate, which measures a different (cheaper) workload than this job runs.
 #
 # MEMORY: all 7 array tasks OOM'd at the previous --mem=8G. That estimate
 # (GRID_N^2 * 2*C(83,2) * 4 =~ 1.8GB) only counted the final (B,C) feature
