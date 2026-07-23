@@ -11,8 +11,22 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
+#SBATCH --exclusive
+#SBATCH --nodelist=compute-11-7,compute-11-10,compute-11-11,compute-11-12,compute-11-33,compute-21-12,compute-21-13,compute-21-14,compute-21-15,compute-21-34,compute-21-36,compute-21-40,compute-21-42
 #SBATCH --array=0-3
 #SBATCH --output=logs/highres_slices_%A_%a.out
+#
+# TEMPORARY tonight-only fix (2026-07-22): both prior attempts (4556090,
+# 4556109) OOM'd/FAILED with a genuine allocation error (RuntimeError: tried
+# to allocate 33GB) despite the --mem=96G / GRID_N=800 formula below
+# estimating a 78GB peak with real margin against a 116GB node -- the
+# formula's own math checks out (9 * GRID_N^2 * 3403 * 4 bytes = ~78GB), so
+# the actual OOM cause was node-sharing: SLURM co-located this job's tasks
+# with each other AND with another user's (watermlj) 2+ day job, none of
+# which get the full 116GB they were individually promised. --exclusive +
+# --nodelist (snapshot from `sinfo -p general` just before this submission,
+# 0 allocated/40 idle) forces this array onto genuinely free whole nodes.
+# This list goes stale as cluster load changes -- re-check before reuse.
 #
 # Higher-resolution / additional 2D basin slices than the original paper's
 # 750x750: one array task per (node_x, node_y) slice, all at the same fixed
