@@ -36,12 +36,12 @@ future work.
 | 5 | Porting the VPS: 3403 Loops to One Gather | 1:45 | 4:50 |
 | 6 | Did I Reproduce It? | 0:55 | 5:45 |
 | 7 | The Memory Wall + the False Positive | 1:30 | 7:15 |
-| 8 | Validate the Ruler, Find the Mechanism | 1:40 | 8:55 |
-| 9 | The Result | 1:00 | 9:55 |
-| 10 | A Second System: Hindmarsh-Rose | 1:15 | 11:10 |
-| 11 | Is Riddling Connectome-Specific? | 1:10 | 12:20 |
-| 12 | Summary & Next | 0:55 | 13:15 |
-| 13 | Thank you | 0:05 | 13:20 |
+| 8 | Validate the Ruler, Find the Mechanism | 1:50 | 9:05 |
+| 9 | The Result | 1:00 | 10:05 |
+| 10 | A Second System: Hindmarsh-Rose | 1:15 | 11:20 |
+| 11 | Is Riddling Connectome-Specific? | 1:10 | 12:30 |
+| 12 | Summary & Next | 0:55 | 13:25 |
+| 13 | Thank you | 0:05 | 13:30 |
 
 ---
 
@@ -187,14 +187,19 @@ noise. So I genuinely thought I'd found an artifact.
 
 ## 8 — Validate the Ruler, Find the Mechanism · *(1:40)*
 
-To settle it I needed a measurement that uses **no clustering at all.** I used each
-node's long-time average — constant on an attractor. But here's the methodological
-move I want you to take away: **before trusting the ruler, I checked it on a system
-whose answer I already knew.** At zero coupling, one chaotic attractor per node, so
-the averages *must* converge together — and they do, falling off like
-one-over-root-T exactly as ergodicity demands. The coupled curve stays **flat**, even
-under 320 times more burn-in. Ergodicity forbids that on *one* attractor. **Which
-means there are many.**
+To settle it I needed a measurement that uses **no clustering at all.** *(Quick
+definition, don't skip it — the audience needs this word to follow the next 30
+seconds.)* **Ergodic** means a trajectory's long-time average equals the average
+over the *whole* attractor — so on a *single* attractor, every initial condition
+has to converge to the *same* long-time value, no matter where it started. That's
+the ruler: each node's long-time average — constant on an attractor.
+
+Here's the methodological move I want you to take away: **before trusting the
+ruler, I checked it on a system whose answer I already knew.** At zero coupling,
+one ergodic attractor per node, so the averages *must* converge together — and
+they do, falling off like one-over-root-T exactly as ergodicity demands. The
+coupled curve stays **flat**, even under 320 times more burn-in. Ergodicity
+forbids that on *one* attractor. **Which means there are many.**
 
 And here's *why*. A Lorenz attractor has two wings. A node's long-time average is
 **zero if it visits both, plus-or-minus 8 if it locks onto one.** *(Point at the

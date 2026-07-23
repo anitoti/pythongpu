@@ -397,12 +397,16 @@ connected regions is not a basin map.'' Hinge of the talk. ~1.5 min.}
     \column{0.46\textwidth}
       \begin{block}{An observable that needs no clustering}
         \footnotesize
-        Per-node long-time $\langle X\rangle$ (constant on an attractor). Checked
-        on $K=0$ (uncoupled, one ergodic attractor per node --- answer already
-        known): converges $1/\sqrt{T}$ as ergodicity demands. $K=0.5$ stays
-        \textbf{flat over 32$\times$ more averaging}, and \textbf{320$\times$} more
-        burn-in doesn't change it either. \textbf{Ergodicity forbids IC-dependent
-        averages on one attractor --- so there are many.}
+        {\color{Rust}\textbf{Ergodic}: a trajectory's long-time average equals the
+        average over the \emph{whole} attractor --- so on a \textbf{single}
+        attractor, every initial condition must converge to the \emph{same}
+        long-time value, no matter where it started.} That's the ruler: per-node
+        long-time $\langle X\rangle$ (constant on an attractor). Checked on $K=0$
+        (uncoupled, one ergodic attractor per node --- answer already known):
+        converges $1/\sqrt{T}$ as ergodicity demands. $K=0.5$ stays \textbf{flat
+        over 32$\times$ more averaging}, and \textbf{320$\times$} more burn-in
+        doesn't change it either. \textbf{Ergodicity forbids IC-dependent averages
+        on one attractor --- so there are many.}
       \end{block}
       \begin{block}{The mechanism}
         \footnotesize
