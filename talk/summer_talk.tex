@@ -225,23 +225,21 @@ anything else survive?'' is THE question. ~1.5 min.}
   \GeoPanels
   \vspace{0.1cm}
   \begin{columns}[T]
-    \column{0.52\textwidth}
+    \column{0.56\textwidth}
+      \footnotesize
       \textbf{Box-counting dimension.} Cover the boundary with boxes of side
       $\varepsilon$; if $N(\varepsilon)\sim\varepsilon^{-D}$, then
-      $D_0=\lim \log N(\varepsilon)/\log(1/\varepsilon)$.
-      Smooth $\Rightarrow D=1$. Area-filling $\Rightarrow D=2$. Fractal in between.
-      \medskip
-
-      By Grebogi--McDonald--Ott--Yorke (1983), $D=d-\alpha$ ($d=2$ here). As
+      $D=\lim \log N(\varepsilon)/\log(1/\varepsilon)$. Smooth $\Rightarrow D=1$.
+      Area-filling $\Rightarrow D=2$. Fractal in between. By
+      Grebogi--McDonald--Ott--Yorke (1983), $D=d-\alpha$ ($d=2$ here) --- as
       $\alpha\to0$ the boundary fills space and \textbf{extra precision buys almost
-      no prediction} --- a hard limit, not an engineering gap.
-      \medskip
-
-      {\footnotesize Fix the parameters and the system \emph{has} some definite
-      number of attractors. We are \textbf{estimating an integer already out
-      there}, not choosing it.}
-    \column{0.44\textwidth}
-      \begin{block}{Hold onto this --- it detonates on slide 9}
+      no prediction}, a hard limit, not an engineering gap.
+      \centering
+      \fig[0.42]{boxcount_alpha.png}{Real box-counting arithmetic on a random
+      fractal (theoretical $D=1.61$, measured $1.59$): $\alpha$ is just the
+      log-log slope's distance from $d=2$.}
+    \column{0.4\textwidth}
+      \begin{block}{Hold onto this --- it detonates on slide 7}
         $D\to2$ has \textbf{two} explanations:
         \smallskip
         \begin{enumerate}
@@ -253,6 +251,10 @@ anything else survive?'' is THE question. ~1.5 min.}
         Both give $D\approx2$ with a beautiful fit. \textbf{$D$ alone cannot tell
         them apart.}
       \end{block}
+      \smallskip
+      {\footnotesize Fix the parameters and the system \emph{has} some definite
+      number of attractors --- we're \textbf{estimating an integer already out
+      there}, not choosing it.}
   \end{columns}
 \end{frame}
 \note{Plant the landmine and SAY you're planting it. Single most important setup

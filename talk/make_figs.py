@@ -404,11 +404,85 @@ def fig_basin_map():
     save(fig, "basin_map_K065.png")
 
 
+# ── 11. Box-counting + alpha, illustrative: how D and alpha are actually
+#        measured, on a genuine random fractal (not fabricated numbers) ──────
+def _random_fractal_dust(levels=5, n=3, p=0.65, seed=3):
+    """Fractal percolation / random Cantor dust: recursively keep each of n×n
+    subcells independently with probability p. Theoretical box-counting
+    dimension is log(n^2 p)/log(n) -- randomised, so (unlike a deterministic
+    bit-XOR pattern) it doesn't alias against power-of-n box grids."""
+    rng = np.random.default_rng(seed)
+    grid = np.ones((1, 1), dtype=bool)
+    for _ in range(levels):
+        h, w = grid.shape
+        keep = rng.random((h, w, n, n)) < p
+        expanded = np.repeat(np.repeat(grid, n, axis=0), n, axis=1).reshape(h, n, w, n)
+        grid = (expanded & np.transpose(keep, (0, 2, 1, 3))).reshape(h * n, w * n)
+    return grid
+
+
+def fig_boxcount():
+    """
+    Slide 4 introduces D = d - alpha but never shows the measurement itself.
+    Genuinely box-counts a random fractal dust (theoretical D known in closed
+    form) at 5 box sizes, fits the log-log slope for D_f, reports
+    alpha = d - D_f. Illustrative pattern, real box-counting arithmetic.
+    """
+    n, p, levels = 3, 0.65, 5
+    dust = _random_fractal_dust(levels=levels, n=n, p=p)
+    g = dust.shape[0]
+    theoretical_D = np.log(n * n * p) / np.log(n)
+
+    sizes = [n**k for k in range(levels)]           # 1, 3, 9, 27, 81
+    counts = []
+    for s in sizes:
+        n_boxes = 0
+        for i in range(0, g, s):
+            for j in range(0, g, s):
+                if dust[i:i+s, j:j+s].any():
+                    n_boxes += 1
+        counts.append(n_boxes)
+    counts = np.array(counts, dtype=float)
+    inv_s = 1.0 / np.array(sizes, dtype=float)
+
+    slope, intercept = np.polyfit(np.log(inv_s), np.log(counts), 1)
+    D_f = slope
+    alpha = 2.0 - D_f
+
+    fig, (a, b) = plt.subplots(1, 2, figsize=(10, 4.3))
+
+    # Panel A: the dust with two box grids overlaid, coarse and fine.
+    a.imshow(dust, cmap=matplotlib.colors.ListedColormap([CREAM, OCHRE]),
+             origin="lower", extent=[0, 1, 0, 1], interpolation="nearest")
+    for s, color, lw in ((n**2, DARK, 1.3), (n**3, RUST, 0.9)):
+        for k in range(1, s):
+            a.axvline(k / s, color=color, lw=lw, alpha=0.7)
+            a.axhline(k / s, color=color, lw=lw, alpha=0.7)
+    a.set_xticks([]); a.set_yticks([]); a.grid(False)
+    a.set_title(f"Cover the set with boxes of side $\\varepsilon$\n"
+               f"(shown: $s{{=}}{n**2}$ dark grid, $s{{=}}{n**3}$ rust grid)", fontsize=10)
+
+    # Panel B: the actual log-log scaling and fit.
+    b.plot(np.log(inv_s), np.log(counts), "o", ms=9, color=RUST, zorder=3)
+    fit_x = np.array([np.log(inv_s).min(), np.log(inv_s).max()])
+    b.plot(fit_x, slope * fit_x + intercept, "--", color=DARK, lw=1.8,
+          label=f"measured $D_f={D_f:.2f}$ (theory {theoretical_D:.2f})")
+    b.set_xlabel(r"$\log(1/\varepsilon)$")
+    b.set_ylabel(r"$\log N(\varepsilon)$")
+    b.set_title(f"$N(\\varepsilon)\\sim\\varepsilon^{{-D}}$: fit gives $D\\approx{D_f:.2f}$\n"
+               f"so $\\alpha = d - D \\approx {alpha:.2f}$ (d=2)", fontsize=10)
+    b.legend(loc="upper left", fontsize=8.5)
+
+    fig.suptitle("Measuring crinkliness: box-counting and $\\alpha$   (illustrative)",
+                fontsize=12)
+    save(fig, "boxcount_alpha.png")
+
+
 if __name__ == "__main__":
     print("generating figures ->", FIGS)
     for f in (fig_benchmark, fig_alignment, fig_lobe_hist, fig_onset,
               fig_convergence, fig_persistence, fig_adjacency, fig_lorenz,
-              fig_cartoon, fig_basin_map):
+              fig_cartoon, fig_basin_map, fig_boxcount):
         try:
             f()
         except Exception as exc:      # one bad figure must not kill the batch
