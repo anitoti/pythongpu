@@ -86,7 +86,12 @@ CHUNK=${CHUNK:-64}
 PAIR_CHUNK=${PAIR_CHUNK:-400}
 ALIGNMENT=${ALIGNMENT:-corrected}
 
-OUTDIR="data/derivatives/true_vps_c${K//./_}"
+# OUTDIR includes ALIGNMENT so a "matlab"-mode run (exact reproduction of the
+# paper's reference off-by-one, for matching their published numbers) never
+# collides with a "corrected"-mode run (the fixed lag alignment) at the same
+# coupling -- these are two deliberately different results, not retries of
+# the same one.
+OUTDIR="data/derivatives/true_vps_${ALIGNMENT}_c${K//./_}"
 mkdir -p "$OUTDIR"
 
 echo "[task ${SLURM_ARRAY_TASK_ID}] true VPS  K=${K}  grid_n=${GRID_N}  " \
