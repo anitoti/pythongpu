@@ -1,17 +1,27 @@
 # RAPS Practice Script — *Rapidly Examining Fractal Basin Structure on the GPU*
 
 **Anna Totilca · Clarkson HPC REU 2026 · Advisor: Dr. Jeremie Fish**
-Deck: `talk/summer_talk.tex` (16 slides). Target: **≤ 15 min.** This script is
-budgeted at **~13.75 min** to leave room for pauses, laughs, and questions.
+Deck: `talk/summer_talk.tex` (13 slides). Actual slot: **15 min, questions after.**
+This script is budgeted at **~13:20** to leave real margin — a 15-minute slot with
+a hard stop is not the place to run long.
 
 **How to use this:** the *italic cues* are delivery notes (don't say them). The plain
 text is roughly what to say — say it in your own words, don't memorize verbatim. The
 running clock on the right tells you if you're on pace. If you hit a slide and the
 clock is behind, cut to the **bold** sentence and move on.
 
-> ✅ **All 16 slides have real figures.** Slide 9's basin map is generated from the
-> measured `data/derivatives/lorenz_basins_n73_n81_K0.6500.npz` run (8312 distinct
-> 83-bit lobe patterns among 9216 ICs) — genuine static, not a mock-up.
+> ✅ **Every slide has a real figure, including the two added tonight.** Slide 7's
+> basin map is `data/derivatives/lorenz_basins_n73_n81_K0.6500.npz` (8312 distinct
+> 83-bit lobe patterns among 9216 ICs) — genuine static, not a mock-up. Slides 10-11
+> are built from real production data too (HR true-VPS/surrogate comparison, CLV
+> sweeps for both Lorenz and Hindmarsh-Rose, and a pre-existing null-model CLV run).
+
+**What changed from the 16-slide version:** slides 5+6 (port + speedup) merged into
+one; slides 8+9 (memory wall + false positive) merged into one; slides 10+11 (ruler
+validation + mechanism) merged into one; the onset-curve slide and "What I Got Wrong"
+slide were cut entirely to make room; two new slides were added (a second dynamical
+system, and a null-model control) since those are now real, finished results, not
+future work.
 
 ---
 
@@ -23,18 +33,15 @@ clock is behind, cut to the **bold** sentence and move on.
 | 2 | The Science | 1:00 | 1:15 |
 | 3 | The System and the Viewing Plane | 0:55 | 2:10 |
 | 4 | Measuring Crinkliness + landmine | 0:55 | 3:05 |
-| 5 | My Project: port the VPS | 1:00 | 4:05 |
-| 6 | The Port Was Slow (HPC core) | 1:15 | 5:20 |
-| 7 | Did I Reproduce It? | 0:55 | 6:15 |
-| 8 | The Memory Wall | 0:55 | 7:10 |
-| 9 | What the Pipeline Reported | 0:55 | 8:05 |
-| 10 | Validate the Ruler | 0:55 | 9:00 |
-| 11 | The Mechanism | 1:00 | 10:00 |
-| 12 | Where Locking Switches On | 0:55 | 10:55 |
-| 13 | The Result | 1:00 | 11:55 |
-| 14 | What I Got Wrong | 0:50 | 12:45 |
-| 15 | Summary & Next | 0:55 | 13:40 |
-| 16 | Thank you | 0:05 | 13:45 |
+| 5 | Porting the VPS: 3403 Loops to One Gather | 1:45 | 4:50 |
+| 6 | Did I Reproduce It? | 0:55 | 5:45 |
+| 7 | The Memory Wall + the False Positive | 1:30 | 7:15 |
+| 8 | Validate the Ruler, Find the Mechanism | 1:40 | 8:55 |
+| 9 | The Result | 1:00 | 9:55 |
+| 10 | A Second System: Hindmarsh-Rose | 1:15 | 11:10 |
+| 11 | Is Riddling Connectome-Specific? | 1:10 | 12:20 |
+| 12 | Summary & Next | 0:55 | 13:15 |
+| 13 | Thank you | 0:05 | 13:20 |
 
 ---
 
@@ -101,51 +108,40 @@ tell them apart.** Remember that.
 
 ---
 
-## 5 — My Project: port the VPS · *(1:00)*
+## 5 — Porting the VPS: 3403 Loops to One Gather · *(1:45)* — **HPC centerpiece**
 
 So here's my job. Resolving a fractal boundary needs a *huge* grid of initial
 conditions — each one an independent simulation. That's embarrassingly parallel, but
 the original MATLAB runs them one at a time.
 
-And the expensive kernel is this thing called the **Vector Pattern State**, the VPS.
-It labels each run by how *every pair* of regions moves together — for 83 nodes
-that's 3,403 pairs. For each pair it computes two numbers: **tau**, the time lag
-between them, and **L**, how different they are once you line them up by that lag.
-**The lag is the whole point** — it's what detects phase-lagged synchrony, the
-chimera signature. Keep the word "lag" in mind.
+The expensive kernel is this thing called the **Vector Pattern State**, the VPS. It
+labels each run by how *every pair* of regions moves together — for 83 nodes that's
+3,403 pairs. For each pair it computes two numbers: **tau**, the time lag between
+them, and **L**, how different they are once you line them up by that lag. **The lag
+is the whole point** — it's what detects phase-lagged synchrony, the chimera
+signature. Keep the word "lag" in mind, it pays off in a few slides.
 
-*(Gesture to the code.)* MATLAB does this with a for-loop over all 3,403 pairs. I
-turned that into **one batched FFT** — Wiener–Khinchin turns correlation into
-multiplication — plus batched RK4 for the integration, and SLURM job arrays, one
-coupling per GPU. On ACRES that's **130,000 initial conditions per coupling at once.**
+MATLAB does this with a for-loop over all 3,403 pairs. I turned that into **one
+batched FFT** — Wiener–Khinchin turns correlation into multiplication. My first port
+was still **slow** though — never cleared about seven times faster than a plain
+serial CPU version, and at small sizes was actually *slower* than serial. So I
+profiled it, and the bottleneck was **not** the FFT — the FFT was fine. The problem
+was that *after* the FFT found the lag, I had a **Python loop over every possible lag
+value**, twenty thousand iterations, that threw the whole parallel win away.
 
----
+The fix: each pair has its own lag, so build **per-pair aligned index grids and
+gather once, no loop at all.** That took it from three times faster to **375 times
+faster** than serial, verified to float32 precision against the reference. Plus
+batched RK4 and SLURM job arrays, one coupling per GPU — on ACRES that's **130,000
+initial conditions per coupling at once.**
 
-## 6 — The Port Was Slow: Diagnosing the Bottleneck · *(1:15)* — **HPC centerpiece**
+**The one-liner: the FFT was never the problem. The loop after it was.**
 
-Here's the honest part. My first port was **slow** — it never cleared about seven
-times faster than a plain serial CPU version. At small sizes it was actually *slower*
-than serial. For an HPC project, that's a failing grade.
-
-*(Point at the code snippet.)* So I profiled it. And the bottleneck was **not** the
-FFT. The FFT was fine. The problem was that *after* the FFT found the lag, I had a
-**Python loop over every possible lag value** — twenty thousand iterations — that
-threw the whole parallel win away.
-
-The fix was to realize each pair has its own lag, so I build **per-pair aligned index
-grids and gather once, with no loop at all.** That took it from about three times
-faster to **375 times faster** than serial — and I verified it matches the reference
-to float32 precision, so it's not fast *and wrong*.
-
-**The one-liner: the FFT was never the problem. The loop after it was.** That's the
-whole HPC lesson on this slide — the speedup lives in the part you didn't think to
-look at.
-
-*(If behind schedule, stop here and go to slide 7.)*
+*(If behind schedule, compress the profiling detail and land on the 375x number.)*
 
 ---
 
-## 7 — Did I Actually Reproduce It? · *(0:55)*
+## 6 — Did I Actually Reproduce It? · *(0:55)*
 
 A port is only a port if the numbers match. So I transcribed the original MATLAB
 line-by-line and compared, on the paper's own test matrices. *(Point at the plot.)*
@@ -164,32 +160,23 @@ for Dr. Fish.
 
 ---
 
-## 8 — The Memory Wall · *(0:55)*
+## 7 — The Memory Wall + the False Positive · *(1:30)*
 
 Then I hit a wall. The *real* VPS needs the entire trajectory of every simulation in
 memory to cross-correlate it. At even a modest grid, that's **41 gigabytes** — it
-doesn't fit.
+doesn't fit. So production quietly switched to a **streaming approximation** that
+never stores a trajectory. Clever for memory — *but* *(point at the table)* the
+streaming version isn't the VPS. It redefines both tau and L, and crucially **there's
+no lag anywhere in it.** And the lag was the entire reason the VPS exists. **Every
+result I got this summer came from that streaming path** — a resource constraint
+silently changed the science underneath me, and nobody noticed for weeks, including
+me.
 
-So the production runs quietly switched to a **streaming approximation** that never
-stores a trajectory. Clever for memory — *but* *(point at the table)* the streaming
-version isn't the VPS. It redefines both tau and L, and crucially **there's no lag
-anywhere in it.** And the lag was the entire reason the VPS exists.
-
-*(Beat.)* **Every result I got this summer came from that streaming path.** A resource
-constraint silently changed the science underneath me — and nobody noticed for weeks,
-including me. *That's* the HPC lesson people don't put on slides.
-
----
-
-## 9 — What the Pipeline Reported · *(0:55)*
-
-And at first the pipeline gave us **exactly the result the project wanted**:
-dimension between 1.9 and 1.96, gorgeous fits, near-total sensitivity. *(Short pause.)*
-
-But two things itched. The dimension was **flat** as I changed the coupling — a real
-bifurcation should move it. And the automatic basin count and the silhouette score
-flatly disagreed. *(Point at the map — the static.)* And the basin map was **pure
-static.** No connected regions at any zoom.
+And here's what it produced: at first, **exactly the result the project wanted** —
+dimension between 1.9 and 1.96, gorgeous fits. But two things itched. The dimension
+was **flat** as I changed the coupling — a real bifurcation should move it — and the
+automatic basin count and silhouette score flatly disagreed. *(Point at the map — the
+static.)* The basin map was **pure static.** No connected regions at any zoom.
 
 *(This is the callback — say it deliberately.)* Remember slide 4? Dimension-near-2
 means *either* a real fractal boundary *or* a meaningless labelling. **We had measured
@@ -198,57 +185,29 @@ noise. So I genuinely thought I'd found an artifact.
 
 ---
 
-## 10 — Validate the Ruler Before Trusting the Measurement · *(0:55)*
+## 8 — Validate the Ruler, Find the Mechanism · *(1:40)*
 
 To settle it I needed a measurement that uses **no clustering at all.** I used each
-node's long-time average — a time average, so it's constant on an attractor.
+node's long-time average — constant on an attractor. But here's the methodological
+move I want you to take away: **before trusting the ruler, I checked it on a system
+whose answer I already knew.** At zero coupling, one chaotic attractor per node, so
+the averages *must* converge together — and they do, falling off like
+one-over-root-T exactly as ergodicity demands. The coupled curve stays **flat**, even
+under 320 times more burn-in. Ergodicity forbids that on *one* attractor. **Which
+means there are many.**
 
-But here's the methodological move I want you to take away: **before trusting the
-ruler, I checked it on a system whose answer I already knew.** At zero coupling the
-network is uncoupled — one chaotic attractor per node — so the averages *must*
-converge together. *(Point at the plot.)* And they do: the zero-coupling curve falls
-off like one-over-root-T, exactly as ergodicity demands. The coupled curve stays
-**flat** — even under 320 times more burn-in.
-
-So it's not unconverged, and it's not a transient. Ergodicity forbids that on *one*
-attractor. **Which means there are many.**
-
----
-
-## 11 — The Mechanism: Coupling Locks Nodes onto Lobes · *(1:00)*
-
-And here's *why* there are many. A Lorenz attractor has two wings. A node's long-time
-average is **zero if it visits both wings, and about plus-or-minus 8 if it locks onto
-one.** *(Point at the histogram.)* Uncoupled, everything sits at zero. Coupled,
-**98% of nodes are pinned to a single wing.**
-
-So the network's attractor is just a **pattern of plus and minus signs across 83
-nodes.** And that means the basin label is *exact* — it's 83 bits, no clustering, no
-k, no elbow, nothing to argue about. That gives up to **two-to-the-83 — about
-ten-to-the-25 — possible attractors.**
-
-And they're **permanent**: take the same initial conditions in two separate time
-windows, and 99.9% of the bits agree. This is the finding — and notice it makes every
-clustering headache in this talk simply disappear.
+And here's *why*. A Lorenz attractor has two wings. A node's long-time average is
+**zero if it visits both, plus-or-minus 8 if it locks onto one.** *(Point at the
+histogram.)* Uncoupled, everything sits at zero. Coupled, **98% of nodes are pinned
+to a single wing.** So the network's attractor is a **pattern of plus/minus signs
+across 83 nodes** — the basin label is *exact*, 83 bits, no clustering, no k, no
+elbow. Up to **two-to-the-83 possible attractors**, and they're **permanent**: two
+separate time windows, 99.9% of bits agree. This is the finding that makes every
+clustering headache in this talk disappear.
 
 ---
 
-## 12 — Where Does the Locking Switch On? · *(0:55)* — **the RAPS figure**
-
-*(This is the figure that's genuinely new — own it.)* Nobody had asked *when* the
-locking turns on. So I swept it. It's a clean **sigmoid bifurcation at a coupling of
-about 0.07** — *below* the window anyone had looked at.
-
-And the practical payoff for a plane-scanning tool: the largest basin is basically
-zero below onset, peaks around **9% near coupling 0.12**, and then collapses again.
-The paper's own coupling, 0.5, sits **deep in the riddled regime** — the basins are
-too finely intermingled for *any* plane to show structure. **The only coupling window
-where a basin plane is even legible is roughly 0.08 to 0.12.** That tells the next
-person exactly where to point the software.
-
----
-
-## 13 — The Result: Basins Are Genuinely Mingled · *(1:00)*
+## 9 — The Result: Basins Are Genuinely Mingled · *(1:00)*
 
 So I counted the attractors exactly, using those sign patterns. *(Point at the
 table.)* At coupling 0.2 and 0.5, essentially **every initial condition is its own
@@ -266,48 +225,75 @@ add the mechanism the paper didn't name.**
 
 ---
 
-## 14 — What I Got Wrong · *(0:50)*
+## 10 — A Second System: Hindmarsh-Rose · *(1:15)*
 
-I want to show you the wrong turns, because they're the most useful part. I proposed
-four hypotheses and **killed every one with a control**: that it all collapses to
-sync — no; that jitter made the static — no; that the whole thing was a clustering
-artifact — no, it's real; and that my own test was correct — it had three bugs.
+Everything so far is one system, Lorenz. So I asked the obvious next question: does
+any of this hold up on a *different* chaotic model? I ported the whole pipeline —
+true VPS, streaming surrogate, the exact lobe-locking label, and the CLV method too —
+to **Hindmarsh-Rose**, the other canonical bursting-neuron model in this literature.
 
-*(Point at the red box.)* The one that stings: I put the "dimension-2 is ambiguous"
-warning on slide 4, and then spent *days* failing to apply it to my own conclusion.
-Every one of these died to a control against a system whose answer I already knew —
-and that's the *only* reason the real mechanism ever surfaced.
+*(Point at the left figure.)* On Lorenz, the true VPS and the streaming surrogate
+**agreed** — 0.067 apart in fractal dimension. On Hindmarsh-Rose, **they disagree** —
+0.284 apart, and it's not just the number, the *shape* is different: the surrogate
+drops sharply between two couplings and flattens, the true VPS declines smoothly the
+whole way.
 
-**The most dangerous bug is the one that makes your result look better.**
+*(Point at the right figure.)* The CLV method, meanwhile, agrees with the surrogate
+on HR — both say riddled — and HR's Kaplan-Yorke dimension resolves cleanly every
+time, where Lorenz's hyperchaotic network hit a ceiling.
+
+**The takeaway, and say this plainly: the Lorenz validation does not transfer.** A
+substitution that happened to agree on one system is not a general license to trust
+it on the next. Each system needs its own check — that's not a caveat, that's the
+finding.
 
 ---
 
-## 15 — Summary and What's Next · *(0:55)*
+## 11 — Is Riddling Connectome-Specific, or Just Generic? · *(1:10)*
+
+One more control, because a real human connectome is only interesting if it's doing
+something a generic network wouldn't. The CLV method reads the flow's own Jacobian —
+no VPS, no clustering at all — so I ran it on the real DTI connectome *and* on a
+size-matched null model, a random scale-free graph with the same 83 nodes but
+completely unrelated wiring.
+
+*(Point at the figure.)* Both say riddled, at every coupling tested. But the real
+connectome's riddling signature is **far noisier** — including a sharp dip at one
+coupling that the null model never shows at all. And only the real connectome ever
+resolves a finite Kaplan-Yorke dimension; the null model stays at the ceiling
+throughout.
+
+**Read this honestly, don't overclaim it:** riddling itself isn't connectome-specific
+— a generic graph riddles too. What might be specific is *how* the real network's
+riddling structure organizes underneath that. That's an open question, not something
+I've settled tonight.
+
+---
+
+## 12 — Summary and What's Next · *(0:55)*
 
 So, in one breath: I **built the fast plane-scanner** — 130,000 simulations at once,
-375 times over serial. I **tested my own port** and found it doesn't match the source
-— possibly a bug in the *published* code. I found a **memory wall** that had silently
-swapped out the real computation. I built **validated diagnostics** that turned up
-the mechanism: coupling locks nodes onto lobes, giving a thousand-plus permanent,
-mingled basins. And I **quantified the distributed-computing claim** instead of just
-asserting it — serial versus array-job wall-clock at matched resolution, 1.34 to
-3.38 times faster, growing with grid size.
+375 times over serial, and I **quantified the distributed-computing claim** instead
+of asserting it, 1.34 to 3.38 times faster, growing with grid size. I **tested my own
+port** and found it doesn't match the source — possibly a bug in the *published*
+code. I found the **mechanism**: coupling locks nodes onto lobes, giving a
+thousand-plus permanent, mingled basins. I **beat the memory wall** — the true VPS
+now runs at production scale, and agrees with the surrogate on Lorenz but
+**disagrees** on Hindmarsh-Rose. And CLV, an independent method with no VPS and no
+clustering, says riddled on Lorenz, HR, *and* a null-model graph — but only the real
+connectome ever resolves a finite dimension.
 
-Next up: settle the lag question with Dr. Fish, beat the memory wall so the real
-VPS runs at production scale, check the Wada criterion on the exact labels, and
-null models plus CLV transversality, which are in progress. Running right now on
-the cluster: whether a tiny perturbation near a riddled point actually flips the
-lobe pattern — a direct test of the paper's own control-theoretic claim — whether
-the fractal dimension survives swapping the VPS's L2 distance for L1 or cosine, and
-higher-resolution and additional viewing planes.
+Next up: settle the lag question with Dr. Fish; figure out *why* HR's validation
+didn't transfer; the production-scale norm sweep and Rössler extension are running
+now.
 
 **The takeaway: a fast pipeline that can't fail isn't a measurement. The speedup was
-the easy part — checking that the fast thing still computed the *right* thing is where
-the summer actually went.**
+the easy part — checking that the fast thing still computed the *right* thing, on
+more than one system, is where the summer actually went.**
 
 ---
 
-## 16 — Thank you · *(0:05)*
+## 13 — Thank you · *(0:05)*
 
 Thank you — I'm happy to take questions.
 
@@ -341,10 +327,24 @@ Thank you — I'm happy to take questions.
   caught my own bug first: an "uncoupled control" that turned out invalid, because K=0
   labels are already a coin flip before any perturbation touches them. Fixed design
   (boundary vs. interior at the same coupling) is what's running now.
+- **"Why does the surrogate disagree with the true VPS on Hindmarsh-Rose but not
+  Lorenz?"** → Honest answer: not resolved yet, flagged as an open question on slide
+  10. Leading candidate: HR's slow adaptation variable organizes bursting on a much
+  longer timescale than the surrogate's running-mean window can track, so it may be
+  averaging over structure the true lag-search can still see. Could also be that the
+  true VPS's lag search is finding genuinely different (tau, L) pairs in bursting
+  dynamics than in continuously-chaotic ones. Both are testable, neither is tested yet.
+- **"If riddling isn't connectome-specific, why does the connectome matter at all?"**
+  → Riddling as a *phenomenon* looks generic to any similarly-sized network — that's
+  the honest read of slide 11. What's still open is whether the real connectome's
+  *specific pattern* of riddling (which nodes lock together, in what combinations)
+  reflects real anatomy, versus just being one riddled configuration among many
+  equally-likely ones. That's a different, harder question than "does it riddle,"
+  and it's not settled by this comparison.
 
 ---
 
-## CLV / Kaplan–Yorke backup (for slide 15's "in progress" line and Q&A)
+## CLV / Kaplan–Yorke backup (for slide 11 and Q&A)
 
 Full math and provenance: [`talk/notes/clv_kaplan_yorke_pipeline.md`](notes/clv_kaplan_yorke_pipeline.md).
 Cross-check against the true-VPS/surrogate/lobe-locking comparison:
@@ -388,7 +388,37 @@ space and gets expensive fast. This is future work, not done tonight.)*
 
 ---
 
-## Perturbation-test bug + basin reconnaissance backup (Q&A only, not in the 16 slides)
+## "What I got wrong" backup (cut from the 16-slide deck for time, Q&A only)
+
+Was its own slide. Good material if asked "what was the hardest part" or "what
+mistakes did you make": four hypotheses proposed and killed with a control each —
+(1) everything collapses to sync, killed: no sync at any K; (2) IC jitter
+manufactured the static map, killed: zero jitter gives an identical result; (3) the
+whole D_f≈1.9 result is a clustering artifact, killed: it's real riddling; (4) my
+own structure test was correct, killed: it had three separate bugs. The one that
+stings, if asked for a personal reflection: the "D→2 is ambiguous" warning is on
+slide 4, and it still took days to apply it to my own conclusion. Every one of these
+died to a control against a system whose answer was already known — that's the only
+reason the real mechanism ever surfaced. Closing line if used: **"The most
+dangerous bug is the one that makes your result look better."**
+
+---
+
+## Onset-curve backup (cut from the 16-slide deck for time, Q&A only)
+
+Was its own slide ("Where Does the Locking Switch On?"). Real finding, worth having
+ready if asked "does the locking always happen, or is there a transition?": swept a
+deterministic 32² slice, 1024 ICs per coupling. Locking is a clean **sigmoid
+bifurcation at K≈0.07** — below the window anyone had swept before. The largest
+basin is ~0.1% of ICs below onset, peaks at 9.3% near K≈0.12, falls to 0.4% by
+K=0.2. Practical punchline: the paper's own coupling (gel=0.5) sits deep in the
+riddled regime, basins too finely intermingled to map on any plane — the only
+legible window for a basin-plane figure is roughly K≈0.08–0.12.
+`data/derivatives/onset_curve.png` if it comes up.
+
+---
+
+## Perturbation-test bug + basin reconnaissance backup (Q&A only, not in the 13 slides)
 
 Full detail and both figures: [`talk/notes/meeting_outline_2026-07-22.md`](notes/meeting_outline_2026-07-22.md).
 
@@ -422,8 +452,13 @@ D_f-vs-K line.)*
 ## Delivery reminders
 
 - The three callbacks are the spine: **plant** the ambiguity (slide 4), **detonate**
-  it (slide 9), **resolve** it (slides 11–13). Land each one.
-- Say the word **"lag"** on slides 5, 8 — it pays off the memory-wall slide.
-- Slides 6 and 11 are the two you must not rush. Everything else can flex.
-- If you're over time at slide 13, compress 14 to just the last bold line and skip
-  straight to the takeaway on 15.
+  it (slide 7), **resolve** it (slides 8–9). Land each one.
+- Say the word **"lag"** on slide 5 — it pays off on slide 7's memory-wall reveal.
+- Slides 5 and 8 are the two you must not rush; they each carry two merged ideas.
+  Everything else can flex.
+- Slides 10–11 (HR, null model) are new and carry real findings — don't compress
+  these to make time; if you're behind schedule, cut from slide 2-4's framing
+  instead, since 10-11 are the least likely material for this audience to have
+  seen before.
+- If you're over time going into 12, skip straight to the takeaway line and stop —
+  don't try to list every bullet.
