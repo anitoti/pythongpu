@@ -337,7 +337,85 @@ Thank you — I'm happy to take questions.
 - **"Do you have the perturbation results yet?"** → Honest answer: running as of this
   talk, not in hand. It's a direct test of the paper's claim that a vanishingly small
   perturbation near a riddled point should flip the outcome — I'm not going to put a
-  number on the slide I haven't measured yet.
+  number on the slide I haven't measured yet. What I *do* have is the smoke test that
+  caught my own bug first: an "uncoupled control" that turned out invalid, because K=0
+  labels are already a coin flip before any perturbation touches them. Fixed design
+  (boundary vs. interior at the same coupling) is what's running now.
+
+---
+
+## CLV / Kaplan–Yorke backup (for slide 15's "in progress" line and Q&A)
+
+Full math and provenance: [`talk/notes/clv_kaplan_yorke_pipeline.md`](notes/clv_kaplan_yorke_pipeline.md).
+Cross-check against the true-VPS/surrogate/lobe-locking comparison:
+[`talk/notes/meeting_outline_2026-07-22.md`](notes/meeting_outline_2026-07-22.md).
+
+**One-breath version, if asked:** CLV/Kaplan-Yorke is a third, independent
+riddling check that doesn't use any basin-labeling scheme at all — it
+looks at the covariant Lyapunov vectors' transversality angles directly.
+It agrees with the VPS-surrogate and lobe-locking results: RIDDLED at
+every coupling tested.
+
+**How it's built:** Ginelli two-pass algorithm on the coupled-Lorenz
+Jacobian — forward RK4 + periodic QR to get orthonormal-but-not-covariant
+directions and their stretching factors (`T = QR`), then a backward
+triangular solve (`R_k C_{k-1} = C_k`) to recover the true covariant
+vectors `V_k = Q_k C_k`. The `R` diagonals give the Lyapunov exponents;
+Kaplan-Yorke interpolates where the cumulative exponent sum crosses zero:
+`D_KY = k + (Σ_{i≤k} λ_i) / |λ_{k+1}|`.
+
+**The honest caveat, if pressed:** the sweep only resolved a real D_KY at
+one of four couplings. At K=0.05/0.10/0.15 the cumulative sum was still
+positive after all 83 computed CLVs, so the code reports a **ceiling**
+(`D_KY >= 83`, not a number) rather than a fabricated value — meaning the
+true dimension there is *at least* 83 out of 249 tangent dimensions, and
+resolving it for real needs many more CLVs. Only K=0.20 (14/83 positive
+exponents) gave a resolved D_KY of 45.4. The burst-fraction/riddling
+verdict itself, unlike D_KY, doesn't need the ceiling resolved — that's
+why the RIDDLED call stands at every coupling even though the dimension
+number only exists for one of them.
+
+| coupling | n_positive / m | ceiling? | D_KY reported |
+|---|---|---|---|
+| 0.05 | 83/83 | yes | `>= 83` |
+| 0.10 | 74/83 | yes | `>= 83` |
+| 0.15 | 34/83 | yes | `>= 83` |
+| 0.20 | 14/83 | no | 45.40 |
+
+*(If asked "why didn't you just raise --m" — n=3·83=249 is the hard
+ceiling; going much past 83 CLVs starts approaching the full tangent
+space and gets expensive fast. This is future work, not done tonight.)*
+
+---
+
+## Perturbation-test bug + basin reconnaissance backup (Q&A only, not in the 16 slides)
+
+Full detail and both figures: [`talk/notes/meeting_outline_2026-07-22.md`](notes/meeting_outline_2026-07-22.md).
+
+**The invalid-control catch, one breath:** Built the perturbation-sensitivity
+test with K=0 as an "uncoupled control," and the control curve came back
+looking just as sensitive as the riddled K=0.5 case — because at K=0 there's
+zero lobe-locking, so the basin label there is already a coin flip before any
+perturbation touches it. Not a control, just noise. Fix: compare boundary vs.
+interior points at the *same* coupling instead of comparing across couplings.
+Smoke-tested at 96×96, now resubmitted at production scale.
+
+*(`data/derivatives/perturbation_sensitivity_raw.png` — P_flip(δ) for
+K=0.0/0.1/0.5; the K=0.0 curve, labeled INVALID, is already saturating to
+P_flip≈1 within two decades of δ and tracks the riddled K=0.5 curve almost
+exactly. This is the plot that made the bug visible, not the final result.)*
+
+**Basin reconnaissance near K=0.5, one breath:** Before committing to K=0.5 as
+the perturbation test's reference slice, ran three basin-map sweeps at
+K=0.45/0.475/0.50 on the same (73, 81) node pair the true-VPS ladder uses.
+D_f came back flat — 1.8671 → 1.8671 → 1.8673, R²≈0.999 — and 94–95% of ICs
+are their own distinct 83-bit lobe pattern at all three couplings. Another
+independent confirmation that the riddled regime is already fully
+established well before K=0.5, consistent with everything else in the talk.
+
+*(`data/derivatives/basin_maps_K045_050.png`, built by
+`scripts/plot_basin_maps_k045_050.py` — three basin planes plus the flat
+D_f-vs-K line.)*
 
 ---
 
