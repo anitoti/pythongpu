@@ -66,6 +66,7 @@ from pythongpu.utils import get_plot_path
 from pythongpu.networks.static_adjacency import load_dti_laplacian, rewire_edges
 from pythongpu.processing.box_counting import boxcount_2d_gpu, fractal_dimension, boxdiv2, extract_boundary
 from pythongpu.processing.basin_clustering import select_optimal_clusters, plot_selection
+from pythongpu.processing.feature_extraction import vector_pattern_state_batched
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -206,6 +207,7 @@ def run_sweep_streaming(
     L_gpu  : torch.Tensor,
     p      : HindmarshRoseParams,
     device : torch.device,
+    return_mean_x : bool = False,
 ) -> torch.Tensor:
     """
     Integrate all B ICs simultaneously and accumulate VPS features
@@ -222,11 +224,20 @@ def run_sweep_streaming(
     standardised independently across the batch before concatenation,
     giving both unit variance in the VPS vector fed to k-means.
 
+    return_mean_x : bool
+        If True, also accumulate the per-node running mean of X over the
+        recording window and return it as a second tensor. sign(mean_x) is
+        the clustering-free lobe-locking basin label (see lorenz_sweep.py's
+        run_sweep_streaming) -- same convention here since coupling acts
+        through the fast X component only, same as Lorenz's X.
+
     Returns
     -------
     vps : (B, 2*C(N,2)) independently standardised VPS features on device
+    mean_x : (B, N), only when return_mean_x=True, as (vps, mean_x).
     """
     B, N, _ = x0.shape
+    mean_x = torch.zeros(B, N, device=device) if return_mean_x else None
 
     # All unique pairs (i < j), upper triangle, no diagonal
     iu   = torch.triu_indices(N, N, offset=1, device=device)
@@ -257,6 +268,9 @@ def run_sweep_streaming(
         # Simple Welford mean for L (variance not needed for L feature)
         mean_L = mean_L + (L_val - mean_L) / count
 
+        if mean_x is not None:
+            mean_x = mean_x + (x0[:, :, 0] - mean_x) / count
+
     # ── tau_x: normalised phase-coherence proxy ───────────────────────
     var_dx = M2_dx / max(count - 1, 1)
     tau_x  = mean_dx / (var_dx.sqrt() + 1e-8)    # (B, C)  dimensionless, O(1)
@@ -277,7 +291,103 @@ def run_sweep_streaming(
     )   # (B, C)
 
     # Concatenate standardised blocks → (B, 2*C)
-    return torch.cat([tau_x_std, mean_L_std], dim=-1)
+    vps = torch.cat([tau_x_std, mean_L_std], dim=-1)
+    if mean_x is not None:
+        return vps, mean_x
+    return vps
+
+
+def _is_oom(e: Exception) -> bool:
+    return isinstance(e, (torch.cuda.OutOfMemoryError, MemoryError)) or \
+        "memory" in str(e).lower() or "alloc" in str(e).lower()
+
+
+@torch.no_grad()
+def run_sweep_true_vps(
+    x0         : torch.Tensor,
+    L_gpu      : torch.Tensor,
+    p          : HindmarshRoseParams,
+    device     : torch.device,
+    alignment  : str = "corrected",
+    chunk_size : int | None = None,
+    pair_chunk_size : int | None = None,
+    return_mean_x: bool = False,
+):
+    """
+    True (lag-based) VPS for the Hindmarsh-Rose network -- same approach as
+    lorenz_sweep.py's run_sweep_true_vps (two-level chunking over the IC
+    batch and node pairs, both with auto-halving OOM retry), swapped onto
+    HR's own rk4_step_batched/HindmarshRoseParams. See that function's
+    docstring for the full rationale; not repeated here.
+
+    HR's steps_record is ~2x Lorenz's default (tmax=1000 vs 500 at the same
+    dt), so both chunk sizes should be started smaller than the Lorenz
+    defaults until re-measured for this system.
+    """
+    B, N, _ = x0.shape
+    C_total = N * (N - 1) // 2
+    cur_chunk = chunk_size or min(B, 512)
+    cur_pair_chunk = pair_chunk_size or min(C_total, 400)
+
+    vps_chunks: list[torch.Tensor] = []
+    mean_x_chunks: list[torch.Tensor] | None = [] if return_mean_x else None
+
+    start = 0
+    while start < B:
+        end = min(start + cur_chunk, B)
+        try:
+            x_chunk = x0[start:end].clone()
+            Bc = end - start
+            traj = torch.empty(Bc, p.steps_record, N, device=device, dtype=x0.dtype)
+            for step in tqdm(range(p.steps_record), desc=f"true-vps[{start}:{end}]", leave=False):
+                x_chunk = rk4_step_batched(x_chunk, L_gpu, p)
+                traj[:, step, :] = x_chunk[..., 0]
+
+            while True:
+                try:
+                    vps_chunk = vector_pattern_state_batched(
+                        traj, alignment=alignment, pair_chunk_size=cur_pair_chunk)
+                    break
+                except (torch.cuda.OutOfMemoryError, MemoryError, RuntimeError) as e2:
+                    if not _is_oom(e2):
+                        raise
+                    if device.type == "cuda":
+                        torch.cuda.empty_cache()
+                    if cur_pair_chunk <= 1:
+                        raise
+                    cur_pair_chunk = max(1, cur_pair_chunk // 2)
+                    print(f"[hr-true-vps] OOM in pair correlation, halving pair_chunk_size "
+                          f"to {cur_pair_chunk} (ICs [{start}:{end}] stay integrated)")
+
+            vps_chunks.append(vps_chunk)
+            if mean_x_chunks is not None:
+                mean_x_chunks.append(traj.mean(dim=1))
+
+            del traj, x_chunk
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            start = end
+        except (torch.cuda.OutOfMemoryError, MemoryError, RuntimeError) as e:
+            if not _is_oom(e):
+                raise
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            if cur_chunk <= 1:
+                raise
+            cur_chunk = max(1, cur_chunk // 2)
+            print(f"[hr-true-vps] OOM integrating IC chunk, halving chunk_size to {cur_chunk} "
+                  f"and retrying ICs [{start}:{min(start + cur_chunk, B)}]")
+
+    tau_L = torch.cat(vps_chunks, dim=0)
+    C = tau_L.shape[1] // 2
+    tau_x, mean_L = tau_L[:, :C], tau_L[:, C:]
+    tau_x_std = (tau_x - tau_x.mean(dim=0, keepdim=True)) / (tau_x.std(dim=0, keepdim=True) + 1e-8)
+    mean_L_std = (mean_L - mean_L.mean(dim=0, keepdim=True)) / (mean_L.std(dim=0, keepdim=True) + 1e-8)
+    vps = torch.cat([tau_x_std, mean_L_std], dim=-1)
+
+    if mean_x_chunks is not None:
+        return vps, torch.cat(mean_x_chunks, dim=0)
+    return vps
 
 
 # ═══════════════════════════════════════════════════════════════════════════
