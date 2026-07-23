@@ -57,9 +57,21 @@ def true_vps_path(k: str) -> Path:
     return DERIV / f"true_vps_c{tag.replace('.', '_')}" / f"lorenz_basins_n73_n81_K{k}.npz"
 
 
-def load_df(path: Path) -> tuple[float, dict]:
+def load_df(path: Path) -> tuple[float, dict | None]:
     d = np.load(path, allow_pickle=True)
-    return float(np.asarray(d["fractal_dim"]).ravel()[0]), d["config"].item()
+    df = float(np.asarray(d["fractal_dim"]).ravel()[0])
+    try:
+        cfg = d["config"].item()
+    except Exception as e:
+        # config is a pickled object array; a numpy-version mismatch between
+        # the environment that wrote it (ACRES's venv) and this one raises
+        # ModuleNotFoundError('numpy._core') rather than failing to load.
+        # D_f itself is a plain float array and loads fine regardless --
+        # only the confound-check below loses its input.
+        print(f"  (warning: couldn't unpickle config in {path.name}: {e!r} -- "
+              f"skipping the config-match sanity check for this file)")
+        cfg = None
+    return df, cfg
 
 
 def main() -> int:
@@ -79,15 +91,28 @@ def main() -> int:
 
     # Sanity check: everything except vps_method should match between the
     # two sets of files, or this comparison is confounded and not worth
-    # trusting -- fail loudly rather than plot a misleading figure.
+    # trusting -- fail loudly rather than plot a misleading figure. Only
+    # runs when both configs actually unpickled (see load_df) -- if not,
+    # this falls back to the submit-script-level guarantee (same node
+    # pair/grid_n/tmax were hardcoded into both submission scripts) instead
+    # of a runtime check, and says so.
     check_keys = ("slice_node_x", "slice_node_y", "n_osc", "grid_n", "grid_lo",
                  "grid_hi", "sigma", "rho", "beta", "dt", "tmax", "k_clusters")
+    any_skipped = False
     for k, sc, tc in zip(COUPLINGS, surrogate_cfg, true_cfg):
+        if sc is None or tc is None:
+            any_skipped = True
+            continue
         mismatches = {key: (sc.get(key), tc.get(key)) for key in check_keys
                      if sc.get(key) != tc.get(key)}
         if mismatches:
             print(f"REFUSING to plot: K={k} configs differ outside vps_method: {mismatches}")
             return 1
+    if any_skipped:
+        print("NOTE: config-match check skipped for one or both file sets (unpickle failure "
+              "above) -- relying on submit_true_vps_production.sh / the surrogate sweep's own "
+              "script both hardcoding node_x=73, node_y=81, grid_n=96, tmax=500 rather than a "
+              "runtime-verified match.")
 
     fig, (a, b) = plt.subplots(1, 2, figsize=(11, 4.5))
 
