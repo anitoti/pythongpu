@@ -12,7 +12,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --exclusive
-#SBATCH --nodelist=compute-11-7,compute-11-10,compute-11-11,compute-11-12,compute-11-33,compute-21-12,compute-21-13,compute-21-14,compute-21-15,compute-21-34,compute-21-36,compute-21-40,compute-21-42
+#SBATCH --exclude=compute-11-3,compute-11-4,compute-11-5,compute-11-34,compute-11-35,compute-11-36,compute-11-37,compute-11-38,compute-11-39,compute-11-40,compute-21-1,compute-21-3,compute-21-4,compute-21-5,compute-21-6,compute-21-8,compute-21-9,compute-21-11,compute-21-31,compute-21-32,compute-21-33,compute-21-38,compute-21-39
 #SBATCH --array=0-6
 #SBATCH --output=logs/vps_norm_cmp_%A_%a.out
 #
@@ -21,12 +21,15 @@
 # traced to SLURM co-locating several of THIS PROJECT's own concurrent jobs
 # on the same physical nodes, compounded by another user's (watermlj) job
 # that's been running 2+ days across many general-partition nodes. Checked
-# `sinfo -p general` right before this submission: the --nodelist above are
-# the ones showing 0 allocated/40 idle; --exclusive stops any other job
-# (including a different task of this same array) from landing on the same
-# node as this one. This list is a snapshot, not a permanent fix -- it will
-# go stale as cluster load changes; re-check `sinfo -p general` before
-# reusing this file after tonight.
+# `sinfo -p general` right before this submission and --exclude blacklists
+# every node shown busy at that snapshot; --exclusive stops any other job
+# (including a different task of this same array) from landing on whatever
+# free node this one gets. (Tried --nodelist with multiple hosts first --
+# this ACRES SLURM version misparses it against --array, throwing "invalid
+# number of nodes"; --exclude doesn't have that bug.) This exclude list is
+# a snapshot, not a permanent fix -- it will go stale as cluster load
+# changes; re-check `sinfo -p general` before reusing this file after
+# tonight.
 #
 # The production VPS-norm comparison: one array task per norm, same fixed
 # K=0.5 (measured riddled regime), same node pair (28, 79), same grid
